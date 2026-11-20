@@ -132,7 +132,8 @@ def frame(t):
         big = sc["big"]
         if big.isdigit() and int(big) > 1:
             big = str(int(round(int(big) * ease_out(lt / 0.7))))
-        layer = scaled_text(big, F_BIG, WHITE, s, min(1, lt / 0.2) * out_a)
+        fit = min(1.0, 900 / max(1, dr.textlength(sc["big"], font=F_BIG)))  # keep wide numbers inside the frame
+        layer = scaled_text(big, F_BIG, WHITE, s * fit, min(1, lt / 0.2) * out_a)
         im.paste(layer, (int((W - layer.width) / 2), int(760 - layer.height / 2)), layer)
         layer = scaled_text(sc["unit"], F_UNIT, ACC, 1, ease_out((lt - 0.25) / 0.3) * out_a)
         im.paste(layer, (int((W - layer.width) / 2), 960 + int(30 * (1 - ease_out((lt - 0.25) / 0.3)))), layer)
