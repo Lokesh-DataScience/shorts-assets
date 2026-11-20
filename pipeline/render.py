@@ -178,5 +178,11 @@ p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 n = int(TOTAL * FPS)
 for i in range(n):
     p.stdin.write(frame(i / FPS).tobytes())
+# optional cover frame: the thumbnail held for the last 0.5 s, so it can be picked as the Shorts cover
+cover = data.get("cover")
+if cover:
+    cimg = Image.open(os.path.join(os.path.dirname(os.path.abspath(script)), cover)).convert("RGB").resize((W, H))
+    for _ in range(int(0.5 * FPS)):
+        p.stdin.write(cimg.tobytes())
 p.stdin.close(); p.wait()
 print(f"wrote {out} frames={n} dur={n/FPS:.1f}s rc={p.returncode}")
