@@ -94,6 +94,10 @@ F_BIG, F_UNIT, F_SUB = font("Black", 330), font("Black", 110), font("Bold", 58)
 F_PILL, F_CAP, F_HOOK = font("Bold", 40), font("Black", 74), font("Black", 230)
 nfacts = sum(1 for s in data["scenes"] if s["kind"] == "fact")
 
+COVER = None
+if data.get("cover"):
+    COVER = Image.open(os.path.join(os.path.dirname(os.path.abspath(script)), data["cover"])).convert("RGB").resize((W, H))
+
 def frame(t):
     im = bg.copy()
     dr = ImageDraw.Draw(im, "RGBA")
@@ -144,6 +148,14 @@ def frame(t):
         for line in wrap(dr, sc["sub"], F_SUB, 900):
             layer = scaled_text(line, F_SUB, MUTED, 1, ease_out((lt - 0.5) / 0.35) * out_a)
             im.paste(layer, (int((W - layer.width) / 2), y), layer); y += 76
+    elif sc["kind"] == "hook" and COVER is not None:
+        z = 1.0 + 0.10 * (1 - ease_out(lt / 0.35))          # punch-in: starts 10% zoomed, settles in 0.35 s
+        cw, ch = int(W * z), int(H * z)
+        big = COVER.resize((cw, ch), Image.LANCZOS)
+        im.paste(big.crop(((cw - W) // 2, (ch - H) // 2, (cw - W) // 2 + W, (ch - H) // 2 + H)), (0, 0))
+        if out_a < 1:                                       # fade to the background only at the very end
+            im = Image.blend(bg, im, out_a)
+        dr = ImageDraw.Draw(im, "RGBA")
     else:
         f1 = F_HOOK if len(sc["big"]) <= 7 else F_UNIT
         s = 0.5 + 0.5 * ease_back(lt / 0.5)
@@ -156,7 +168,7 @@ def frame(t):
         if a0 <= t < a1:
             pop = 0.85 + 0.15 * ease_back((t - a0) / 0.15)
             lines = wrap(dr, c, F_CAP, 820)
-            y = 1360
+            y = 1500 if (sc["kind"] == "hook" and COVER is not None) else 1360  # keep clear of the cover's badge
             for line in lines:
                 layer = Image.new("RGBA", (W, 110), (0, 0, 0, 0))
                 ld = ImageDraw.Draw(layer)
