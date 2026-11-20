@@ -45,10 +45,11 @@ for i, part in enumerate(P["parts"]):
         tmp = os.path.join(out, f"part{i}_48k.wav")
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", os.path.join(BASE, part["audio"]), "-ac", "1", "-ar", str(SR), tmp], check=True)
         x, _ = sf.read(tmp)
-    chapters.append((offset, part["chapter"]))
     for sc, t in zip(part["scenes"], tm["scenes"]):
-        s = dict(sc); s.update(start=offset + t["start"], end=offset + t["end"], speech=t["speech"],
-                               speech_start=offset + (t["start"] if t["i"] else t["start"]), part=i, chapter=part["chapter"])
+        s = dict(sc); s.update(start=offset + t["start"], end=offset + t["end"], speech=t["speech"], part=i,
+                               chapter=sc.get("chapter_name", part["chapter"]))
+        if not chapters or chapters[-1][1] != s["chapter"]:
+            chapters.append((0.0 if not scenes else s["start"], s["chapter"]))
         scenes.append(s)
     audio += [x.astype(np.float32), np.zeros(int(GAP * SR), np.float32)]
     offset += len(x) / SR + GAP
