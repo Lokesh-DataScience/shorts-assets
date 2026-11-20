@@ -4,7 +4,7 @@
  "audio": "voice.wav",
  "font_main": "../fonts/Baloo2-ExtraBold.ttf",
  "font_sub": "../fonts/Mukta-Bold.ttf",
- "pill": "ट्रेंडिंग फैक्ट्स",
+ "pill": "ख़बर का हिसाब",
  "fact_tag": "फैक्ट #{n}",
  "scenes": [
   {
