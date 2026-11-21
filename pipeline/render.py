@@ -94,6 +94,11 @@ F_BIG, F_UNIT, F_SUB = font("Black", 330), font("Black", 110), font("Bold", 58)
 F_PILL, F_CAP, F_HOOK = font("Bold", 40), font("Black", 74), font("Black", 230)
 nfacts = sum(1 for s in data["scenes"] if s["kind"] == "fact")
 
+INTRO = data.get("intro")
+if INTRO == "rocket":
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import intro_rocket
+
 COVER = None
 if data.get("cover"):
     COVER = Image.open(os.path.join(os.path.dirname(os.path.abspath(script)), data["cover"])).convert("RGB").resize((W, H))
@@ -105,6 +110,9 @@ def frame(t):
     for (x, y, r, sp) in particles:
         yy = (y - t * sp) % H
         dr.ellipse([x - r, yy - r, x + r, yy + r], fill=(255, 255, 255, 50))
+    if INTRO == "rocket":
+        im = intro_rocket.draw(im, t)
+        dr = ImageDraw.Draw(im, "RGBA")
     # which scene
     idx = 0
     for s in tim["scenes"]:
@@ -193,9 +201,19 @@ def frame(t):
             break
     return im
 
-cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-       "-i", data.get("audio") and os.path.join(os.path.dirname(os.path.abspath(script)), data["audio"]) or os.path.join(build, "voice.wav"),
-       "-af", "loudnorm=I=-14:TP=-1.5:LRA=11,apad", "-shortest",
+VOICE = data.get("audio") and os.path.join(os.path.dirname(os.path.abspath(script)), data["audio"]) or os.path.join(build, "voice.wav")
+cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-i", VOICE]
+if INTRO == "rocket":
+    # launch sound under the voice: voice normalised first, SFX at a fixed level below it, then a limiter
+    sfx = intro_rocket.make_sfx(os.path.join(build, "rocket_sfx.wav"))
+    vol = data.get("sfx_volume", 0.32)
+    cmd += ["-i", sfx, "-filter_complex",
+            f"[1:a]aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[v];"
+            f"[2:a]volume={vol}[s];[v][s]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,apad[a]",
+            "-map", "0:v", "-map", "[a]", "-shortest"]
+else:
+    cmd += ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11,apad", "-shortest"]
+cmd += [
        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", out]
 p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
