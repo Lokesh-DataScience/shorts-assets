@@ -22,5 +22,12 @@
  "thumbnail": "pipeline/work/navic-hindi/thumb.png",
  "youtube_url": "https://youtube.com/shorts/I1g4Sy662_k",
  "published": "2026-11-20",
- "posted_via": "manual upload"
+ "posted_via": "manual upload",
+ "studio_stats": {
+  "checked": "2026-11-20 20:42 IST",
+  "minutes_live": 15,
+  "stayed_to_watch_pct": 6.9,
+  "swiped_away_pct": 93.1,
+  "note": "hook faded in from a blank frame 0"
+ }
 }

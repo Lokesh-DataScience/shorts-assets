@@ -22,5 +22,13 @@
  "youtube_url": "https://youtube.com/shorts/gMPNE-kNxG4",
  "published": "2026-11-21",
  "posted_via": "manual upload",
- "video_has_cover": false
+ "video_has_cover": false,
+ "studio_stats": {
+  "checked": "2026-11-21 08:10 IST",
+  "minutes_live": 52,
+  "engaged_views": 23,
+  "stayed_to_watch_pct": 34.9,
+  "swiped_away_pct": 65.2,
+  "note": "first Short with hook visible from frame 0; NavIC (old opening) was 6.9% stayed"
+ }
 }
