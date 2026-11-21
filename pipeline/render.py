@@ -95,9 +95,9 @@ F_PILL, F_CAP, F_HOOK = font("Bold", 40), font("Black", 74), font("Black", 230)
 nfacts = sum(1 for s in data["scenes"] if s["kind"] == "fact")
 
 INTRO = data.get("intro")
-if INTRO == "rocket":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import intro_rocket
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import intro_rocket, fact_anims
+ANIM_FONTS = {"small": font("Black", 44), "mid": font("Black", 120)}
 
 COVER = None
 if data.get("cover"):
@@ -119,6 +119,11 @@ def frame(t):
         if t >= s["start"]: idx = s["i"]
     sc, tm = data["scenes"][idx], tim["scenes"][idx]
     lt = t - tm["start"]
+    if sc.get("anim"):
+        sdur = tm["end"] - tm["start"]
+        fade = 1.0 if idx == len(tim["scenes"]) - 1 else max(0.0, min(1.0, (tm["end"] - t) / 0.2))
+        im = fact_anims.draw(im, sc["anim"], lt, sdur, fade, ANIM_FONTS, sc.get("anim_args"), intro_rocket.SPRITE)
+        dr = ImageDraw.Draw(im, "RGBA")
     # top pill
     pill = data.get("pill", "TRENDING FACTS")
     pw = dr.textlength(pill, font=F_PILL) + 60
