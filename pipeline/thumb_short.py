@@ -46,7 +46,7 @@ def font_fit(txt, maxw, start, minsize=60):
 def centred(txt, f, y, fill, stroke=14, scol=(0, 0, 0)):
     w = d.textlength(txt, font=f)
     d.text(((W - w) / 2, y), txt, font=f, fill=fill, stroke_width=stroke, stroke_fill=scol)
-    bb = f.getbbox(txt); return y + (bb[3] - bb[1]) + stroke
+    return y + int(f.size * 1.12) + stroke   # line advance from font size: Devanagari matras need the room
 
 fg = Image.new("RGBA", (W, H), (0, 0, 0, 0)); im = fg; d = ImageDraw.Draw(fg, "RGBA")
 y = 330
@@ -59,7 +59,7 @@ if a.top:
     y = centred(a.top, font_fit(a.top, 960, 150), y, (255, 255, 255)) + 40
 # hook: split into at most two lines, each as big as fits
 words = a.hook.split()
-lines = [a.hook] if len(words) <= 2 else [" ".join(words[: (len(words) + 1) // 2]), " ".join(words[(len(words) + 1) // 2:])]
+lines = [a.hook] if (len(words) <= 2 or ImageFont.truetype(a.font, 200).getlength(a.hook) <= 1000) else [" ".join(words[: (len(words) + 1) // 2]), " ".join(words[(len(words) + 1) // 2:])]
 for ln in lines:
     y = centred(ln, font_fit(ln, 1000, 260), y, (255, 205, 0), stroke=18) + 30
 if a.badge:
