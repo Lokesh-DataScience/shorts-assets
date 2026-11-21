@@ -157,12 +157,22 @@ def frame(t):
             im = Image.blend(bg, im, out_a)
         dr = ImageDraw.Draw(im, "RGBA")
     else:
-        f1 = F_HOOK if len(sc["big"]) <= 7 else F_UNIT
-        s = 0.5 + 0.5 * ease_back(lt / 0.5)
-        layer = scaled_text(sc["big"], f1, WHITE, s, min(1, lt / 0.2) * out_a)
-        im.paste(layer, (int((W - layer.width) / 2), int(720 - layer.height / 2)), layer)
-        layer = scaled_text(sc["sub"], F_UNIT if sc["kind"] == "hook" else F_UNIT, ACC, 0.8, ease_out((lt - 0.3) / 0.35) * out_a)
-        im.paste(layer, (int((W - layer.width) / 2), 900), layer)
+        if sc["kind"] == "hook":
+            # hook: fully visible from frame 0 (no fade-in from a blank screen), big, with a quick punch-in
+            punch = 1.0 + 0.12 * (1 - ease_out(lt / 0.35))
+            fit_big = min(1.0, 860 / max(1, dr.textlength(sc["big"], font=F_HOOK)))  # leaves room for the punch-in
+            layer = scaled_text(sc["big"], F_HOOK, ACC, fit_big * punch, out_a)
+            im.paste(layer, (int((W - layer.width) / 2), int(720 - layer.height / 2)), layer)
+            fit_sub = min(1.0, 860 / max(1, dr.textlength(sc["sub"], font=F_UNIT)))
+            layer = scaled_text(sc["sub"], F_UNIT, WHITE, fit_sub * punch, out_a)
+            im.paste(layer, (int((W - layer.width) / 2), 930), layer)
+        else:
+            f1 = F_HOOK if len(sc["big"]) <= 7 else F_UNIT
+            s = 0.5 + 0.5 * ease_back(lt / 0.5)
+            layer = scaled_text(sc["big"], f1, WHITE, s, min(1, lt / 0.2) * out_a)
+            im.paste(layer, (int((W - layer.width) / 2), int(720 - layer.height / 2)), layer)
+            layer = scaled_text(sc["sub"], F_UNIT, ACC, 0.8, ease_out((lt - 0.3) / 0.35) * out_a)
+            im.paste(layer, (int((W - layer.width) / 2), 900), layer)
     # captions (safe zone: above bottom UI, away from right-side buttons)
     for (a0, a1, c) in captions:
         if a0 <= t < a1:
