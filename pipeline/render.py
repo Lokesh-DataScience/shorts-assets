@@ -168,7 +168,9 @@ def frame(t):
         if a0 <= t < a1:
             pop = 0.85 + 0.15 * ease_back((t - a0) / 0.15)
             lines = wrap(dr, c, F_CAP, 820)
-            y = 1500 if (sc["kind"] == "hook" and COVER is not None) else 1360  # keep clear of the cover's badge
+            if sc["kind"] == "hook" and COVER is not None:
+                break  # the cover already shows the hook in big text; captions would sit on its badge
+            y = 1360
             for line in lines:
                 layer = Image.new("RGBA", (W, 110), (0, 0, 0, 0))
                 ld = ImageDraw.Draw(layer)
