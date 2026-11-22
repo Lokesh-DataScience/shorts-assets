@@ -15,6 +15,8 @@ Writes out_dir/long.mp4, out_dir/chapters.txt (YouTube timestamps), out_dir/timi
 import json, os, re, subprocess, sys
 import numpy as np, soundfile as sf
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import long_visuals as LV
 
 W, H, FPS = 1920, 1080, 30
 proj_path, out = sys.argv[1], sys.argv[2]
@@ -130,23 +132,24 @@ for s in scenes:
 
 # ---------- scene renderers (lt = seconds into scene, a = fade-out alpha) ----------
 CX, CY = W / 2, 470
+MAXW = 1600
 
 def r_title(im, dr, s, lt, a):
     if s.get("chapter_no"):
         put(im, layer_text(f"चैप्टर {s['chapter_no']}", f_sub, ACC, eo(lt / 0.3) * a), CX, CY - 190)
-    sc = (0.6 + 0.4 * eb(lt / 0.5)) * fit(f_big, s["big"], 1600)
+    sc = (0.6 + 0.4 * eb(lt / 0.5)) * fit(f_big, s["big"], MAXW)
     put(im, layer_text(s["big"], f_big, WHITE, min(1, lt / 0.2) * a), CX, CY - 40, sc)
     if s.get("sub"):
-        put(im, layer_text(s["sub"], f_mid, ACC, eo((lt - 0.35) / 0.35) * a), CX, CY + 110 + 20 * (1 - eo((lt - 0.35) / 0.35)), fit(f_mid, s["sub"], 1600))
+        put(im, layer_text(s["sub"], f_mid, ACC, eo((lt - 0.35) / 0.35) * a), CX, CY + 110 + 20 * (1 - eo((lt - 0.35) / 0.35)), fit(f_mid, s["sub"], MAXW))
 
 def r_stat(im, dr, s, lt, a):
-    sc = (0.5 + 0.5 * eb(lt / 0.45)) * fit(f_hero, s["big"], 1500)
+    sc = (0.5 + 0.5 * eb(lt / 0.45)) * fit(f_hero, s["big"], MAXW)
     put(im, layer_text(s["big"], f_hero, WHITE, min(1, lt / 0.2) * a), CX, CY - 60, sc)
     put(im, layer_text(s.get("unit", ""), f_unit, ACC, eo((lt - 0.25) / 0.3) * a), CX, CY + 95)
     bw = 520 * eo((lt - 0.45) / 0.5)
     dr.rounded_rectangle([CX - bw / 2, CY + 150, CX + bw / 2, CY + 162], 6, fill=GOLD2 + (int(255 * a),))
     if s.get("sub"):
-        put(im, layer_text(s["sub"], f_sub, MUTED, eo((lt - 0.5) / 0.35) * a), CX, CY + 215, fit(f_sub, s["sub"], 1500))
+        put(im, layer_text(s["sub"], f_sub, MUTED, eo((lt - 0.5) / 0.35) * a), CX, CY + 215, fit(f_sub, s["sub"], MAXW))
 
 def r_compare(im, dr, s, lt, a):
     items = s["items"]; vmax = max(i["value"] for i in items)
@@ -206,15 +209,31 @@ def r_list(im, dr, s, lt, a):
         im.paste(L, (int(480 + 30 * (1 - al)), int(y - L.height / 2)), L)
 
 def r_text(im, dr, s, lt, a):
-    lines = wrap(s["head"], f_big, 1600)
+    lines = wrap(s["head"], f_big, MAXW)
     y = CY - (len(lines) - 1) * 70 - 30
     for k, ln in enumerate(lines):
         put(im, layer_text(ln, f_big, WHITE, eo((lt - 0.12 * k) / 0.35) * a), CX, y, 0.85 + 0.15 * eb((lt - 0.12 * k) / 0.4))
         y += 140
     if s.get("sub"):
-        put(im, layer_text(s["sub"], f_sub, ACC, eo((lt - 0.4) / 0.35) * a), CX, y + 10, fit(f_sub, s["sub"], 1600))
+        put(im, layer_text(s["sub"], f_sub, ACC, eo((lt - 0.4) / 0.35) * a), CX, y + 10, fit(f_sub, s["sub"], MAXW))
 
-R = dict(title=r_title, stat=r_stat, compare=r_compare, line=r_line, list=r_list, text=r_text)
+CTX = dict(text=layer_text, put=put, fit=fit, f_mid=f_mid, f_sub=f_sub, f_small=f_small, base=BASE,
+           pdir=P.get("people_dir", "people"), people=P.get("people", {}),
+           fonts={"mid": f_big, "sub": f_sub, "small": f_small})
+R = dict(title=r_title, stat=r_stat, compare=r_compare, line=r_line, list=r_list, text=r_text,
+         leaders=lambda im, dr, s, lt, a: LV.r_leaders(im, dr, s, lt, a, CTX),
+         warheads=lambda im, dr, s, lt, a: LV.r_warheads(im, dr, s, lt, a, CTX),
+         hormuz=lambda im, dr, s, lt, a: LV.r_hormuz(im, dr, s, lt, a, CTX))
+
+def draw_scene(im, dr, s, lt, a):
+    global CX, MAXW
+    if s.get("anim") and s["type"] in ("title", "stat", "text"):
+        CX, MAXW = 780, 1150                   # content on the left, animation on the right
+        R[s["type"]](im, dr, s, lt, a)
+        LV.side_anim(im, s["anim"], lt, a * LV.eo(lt / 0.3), 1530, 480, CTX)
+        CX, MAXW = W / 2, 1600
+    else:
+        R[s["type"]](im, dr, s, lt, a)
 
 def frame(t):
     z = 1.0 + 0.04 * ((t % 20) / 20)  # slow push-in
@@ -234,7 +253,7 @@ def frame(t):
     ch = s["chapter"]
     dr.text((W - 60 - f_tag.getlength(ch), 54), ch, font=f_tag, fill=MUTED)
     dr.rectangle([0, H - 8, W * t / TOTAL, H], fill=GOLD + (220,))
-    R[s["type"]](im, dr, s, lt, a)
+    draw_scene(im, dr, s, lt, a)
     for (c0, c1, c) in caps:
         if c0 <= t < c1:
             pop = 0.9 + 0.1 * eb((t - c0) / 0.15)
@@ -243,6 +262,22 @@ def frame(t):
             put(im, L, CX, H - 140, sc)
             break
     return im
+
+# ---------- preview ----------
+if os.environ.get("PREVIEW"):
+    lt_p = float(os.environ.get("PREVIEW_T", "1.8"))
+    tiles = []
+    for s in scenes:
+        im = bg.crop((100, 60, 100 + W, 60 + H)).copy(); dr = ImageDraw.Draw(im, "RGBA")
+        draw_scene(im, dr, s, lt_p, 1.0)
+        dr.text((20, H - 60), s.get("id", ""), font=f_tag, fill=GOLD)
+        if os.environ.get("PREVIEW_IDS") and s.get("id") in os.environ["PREVIEW_IDS"].split(","):
+            im.save(os.path.join(out, f"full_{s['id']}.png"))
+        tiles.append(im.resize((480, 270)))
+    cols = 6; rows = (len(tiles) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * 480, rows * 270))
+    for k, t_ in enumerate(tiles): sheet.paste(t_, ((k % cols) * 480, (k // cols) * 270))
+    sheet.save(os.path.join(out, "preview.png")); print("preview", len(tiles)); sys.exit(0)
 
 # ---------- encode ----------
 outmp4 = os.path.join(out, "long.mp4")

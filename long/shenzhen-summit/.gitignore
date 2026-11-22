@@ -1,0 +1,5 @@
+build/
+rec*.wav
+voice.wav
+src_photos/
+people/
