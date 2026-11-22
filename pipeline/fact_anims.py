@@ -319,9 +319,104 @@ def draw(im, name, lt, dur, alpha, fonts, args=None, sprite=None):
         fn(L, lt, dur, fonts, args or {}, sprite=sprite)
     else:
         fn(L, lt, dur, fonts, args or {})
-    a = max(0.0, min(1.0, alpha)) * _ease(lt / 0.25)
+    a = max(0.0, min(1.0, alpha)) * (1.0 if name == "leaders" else _ease(lt / 0.25))   # hook visuals: visible at frame 0
     if a < 1:
         L.putalpha(L.getchannel("A").point(lambda v: int(v * a)))
     out = im.convert("RGBA")
     out.alpha_composite(L)
     return out.convert("RGB")
+
+
+# ================================================================ geopolitics set (reuses long_visuals drawings)
+def _lv():
+    import long_visuals as LV
+    return LV
+
+
+def _ctx(size=44):
+    from PIL import ImageFont
+    import os as _os
+    f = ImageFont.truetype(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "fonts", "Mukta-Bold.ttf"), size)
+    LV = _lv()
+    def text(t, font, fill, alpha=1.0, stroke=0):
+        bb = font.getbbox(t); L = Image.new("RGBA", (bb[2] - bb[0] + 40, bb[3] - bb[1] + 40), (0, 0, 0, 0))
+        ImageDraw.Draw(L).text((20 - bb[0], 20 - bb[1]), t, font=font, fill=fill + (int(255 * alpha),))
+        return L
+    return {"f_small": f, "f_sub": f, "f_mid": f, "text": text, "put": lambda *a, **k: None, "fit": lambda *a: 1.0}
+
+
+def _boxed(L, name, lt, size=340, cy=CY + 5):
+    LV = _lv()
+    T = Image.new("RGBA", (420, 420), (0, 0, 0, 0))
+    LV.side_anim(T, name, lt, 1.0, 210, 210, _ctx())
+    T = T.resize((size, size), Image.LANCZOS)
+    L.alpha_composite(T, (int(540 - size / 2), int(cy - size / 2)))
+
+
+def pin(L, lt, dur, fonts, args): _boxed(L, "pin", lt)
+def treaty(L, lt, dur, fonts, args): _boxed(L, "treaty", lt)
+def stamp(L, lt, dur, fonts, args): _boxed(L, "cross", lt)
+
+
+def missiles(L, lt, dur, fonts, args):
+    LV = _lv(); d = ImageDraw.Draw(L, "RGBA")
+    rows = args.get("rows", [("us", 5000), ("ru", 5000), ("cn", 620)])
+    for k, (code, val) in enumerate(rows):
+        y = BY0 + 45 + k * 92
+        fl = LV.flag(code, 84, 56); L.alpha_composite(fl, (70, int(y - 28)))
+        n = val / 250; shown = n * _ease((lt - 0.2 - 0.25 * k) / 1.3)
+        col = (255, 120, 90) if code != "cn" else (255, 196, 0)
+        for j in range(int(math.ceil(n))):
+            fr = max(0.0, min(1.0, shown - j))
+            if fr <= 0: break
+            LV._missile(d, 190 + j * 40, y + 6, 1.25 * _back(fr), col)
+
+
+def hormuz(L, lt, dur, fonts, args):
+    LV = _lv()
+    C = Image.new("RGBA", (1920, 1080), (0, 0, 0, 0)); dc = ImageDraw.Draw(C, "RGBA")
+    LV.r_hormuz(C, dc, {"blocked": args.get("blocked", True)}, lt, 1.0, _ctx(58))
+    C = C.crop((250, 240, 1670, 820))
+    h = 290; w = int(C.width * h / C.height)
+    C = C.resize((w, h), Image.LANCZOS)
+    L.alpha_composite(C, (int(540 - w / 2), BY0 - 10))
+
+
+def leaders(L, lt, dur, fonts, args):
+    """Hook: three flag discs with the user's cutout photos, fully visible from frame 0 (quick pop-in only)."""
+    import os as _os
+    LV = _lv()
+    who = args.get("who", ["us", "cn", "ru"]); base = args.get("_base", ".")
+    r, cy = 150, 1160
+    for k, key in enumerate(who):
+        cx = 540 + (k - (len(who) - 1) / 2) * 330
+        p = _os.path.join(base, args.get("dir", "people"), f"{key}.png")
+        ph = Image.open(p).convert("RGBA") if _os.path.exists(p) else None
+        pop = 0.9 + 0.1 * _back(lt / 0.35)
+        rr = int(r * pop * (1.08 if k == 1 else 1.0))
+        T = Image.new("RGBA", (1080, 1920), (0, 0, 0, 0))
+        LV.leader_card(T, cx, cy, rr, key, {}, ph, lt, 1.0, k == 1, {"mid": None, "sub": _ctx(40)["f_small"], "small": _ctx(30)["f_small"]})
+        # leader_card draws an empty name plate when no name is given: cut everything below the disc
+        T = T.crop((0, 0, 1080, cy + rr + 12))
+        L.alpha_composite(T)
+
+
+def longthumb(L, lt, dur, fonts, args):
+    import os as _os
+    p = _os.path.join(args.get("_base", "."), args["img"])
+    if not _os.path.exists(p): return
+    th = Image.open(p).convert("RGBA")
+    s = 0.6 + 0.4 * _back(lt / 0.5)
+    w = int(520 * s * (1 + 0.03 * math.sin(lt * 5))); h = int(w * 9 / 16)
+    th = th.resize((w, h), Image.LANCZOS)
+    d = ImageDraw.Draw(L, "RGBA")
+    x0, y0 = 540 - w // 2, CY - h // 2 - 10
+    d.rounded_rectangle([x0 - 8, y0 - 8, x0 + w + 8, y0 + h + 8], 18, fill=(255, 255, 255))
+    L.alpha_composite(th, (x0, y0))
+    pr = 46 * s
+    d.ellipse([540 - pr, CY - 10 - pr, 540 + pr, CY - 10 + pr], fill=(230, 30, 40, 235))
+    d.polygon([(540 - pr * 0.35, CY - 10 - pr * 0.5), (540 - pr * 0.35, CY - 10 + pr * 0.5), (540 + pr * 0.55, CY - 10)], fill=(255, 255, 255))
+
+
+ANIMS.update({"pin": pin, "treaty": treaty, "stamp": stamp, "missiles": missiles, "hormuz": hormuz,
+              "leaders": leaders, "longthumb": longthumb})

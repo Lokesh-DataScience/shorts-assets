@@ -122,7 +122,8 @@ def frame(t):
     if sc.get("anim"):
         sdur = tm["end"] - tm["start"]
         fade = 1.0 if idx == len(tim["scenes"]) - 1 else max(0.0, min(1.0, (tm["end"] - t) / 0.2))
-        im = fact_anims.draw(im, sc["anim"], lt, sdur, fade, ANIM_FONTS, sc.get("anim_args"), intro_rocket.SPRITE)
+        aargs = dict(sc.get("anim_args") or {}); aargs["_base"] = os.path.dirname(os.path.abspath(script))
+        im = fact_anims.draw(im, sc["anim"], lt, sdur, fade, ANIM_FONTS, aargs, intro_rocket.SPRITE)
         dr = ImageDraw.Draw(im, "RGBA")
     # top pill
     pill = data.get("pill", "TRENDING FACTS")
@@ -176,9 +177,10 @@ def frame(t):
             fit_big = min(1.0, 860 / max(1, dr.textlength(sc["big"], font=F_HOOK)))  # leaves room for the punch-in
             layer = scaled_text(sc["big"], F_HOOK, ACC, fit_big * punch, out_a)
             im.paste(layer, (int((W - layer.width) / 2), int(720 - layer.height / 2)), layer)
-            fit_sub = min(1.0, 860 / max(1, dr.textlength(sc["sub"], font=F_UNIT)))
-            layer = scaled_text(sc["sub"], F_UNIT, WHITE, fit_sub * punch, out_a)
-            im.paste(layer, (int((W - layer.width) / 2), 930), layer)
+            if sc.get("sub"):
+                fit_sub = min(1.0, 860 / max(1, dr.textlength(sc["sub"], font=F_UNIT)))
+                layer = scaled_text(sc["sub"], F_UNIT, WHITE, fit_sub * punch, out_a)
+                im.paste(layer, (int((W - layer.width) / 2), 930), layer)
         else:
             f1 = F_HOOK if len(sc["big"]) <= 7 else F_UNIT
             s = 0.5 + 0.5 * ease_back(lt / 0.5)
