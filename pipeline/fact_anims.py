@@ -906,3 +906,126 @@ def causes(L, lt, dur, fonts, args):
 
 ANIMS.update({"candlecrash": candlecrash, "ticker": ticker, "linecrash": linecrash, "moneybag": moneybag,
               "sectordown": sectordown, "causes": causes})
+
+
+# ================================================================ news-bulletin set
+def bottle(L, lt, dur, fonts, args):
+    """Generic water bottle (no brand), lab test FAIL stamp, then company's response tag."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    cx, base = 330, BY1 - 10
+    d.rounded_rectangle([cx - 28, base - 290, cx + 28, base - 250], 8, fill=(40, 110, 220))
+    d.rounded_rectangle([cx - 70, base - 255, cx + 70, base], 34, fill=(190, 230, 255, 200))
+    lvl = base - 210 + 6 * math.sin(lt * 4)
+    d.rounded_rectangle([cx - 62, lvl, cx + 62, base - 8], 28, fill=(90, 170, 240, 200))
+    d.rectangle([cx - 70, base - 170, cx + 70, base - 110], fill=(255, 255, 255, 230))
+    for k in range(5):
+        ph = (lt * 0.7 + k / 5) % 1
+        bx = cx - 40 + k * 20; by = base - 20 - 180 * ph
+        d.ellipse([bx - 6, by - 6, bx + 6, by + 6], outline=(255, 255, 255, int(220 * (1 - ph))), width=2)
+    # test tube
+    tx = 560
+    d.rounded_rectangle([tx - 24, BY0 + 10, tx + 24, base - 30], 24, outline=(230, 230, 240), width=5)
+    d.rounded_rectangle([tx - 19, BY0 + 120, tx + 19, base - 35], 19, fill=(255, 196, 0, 200))
+    if lt > 0.8:
+        k = _back((lt - 0.8) / 0.35)
+        st = Image.new("RGBA", (300, 110), (0, 0, 0, 0)); sd = ImageDraw.Draw(st)
+        sd.rounded_rectangle([4, 4, 296, 106], 14, outline=(230, 40, 50), width=9)
+        t = args.get("stamp", "FAIL")
+        sd.text((150 - sd.textlength(t, font=fonts["mid"]) / 2 * 0.6, 8), "", font=f)
+        sd.text((150 - sd.textlength(t, font=f) / 2, 22), t, font=f, fill=(230, 40, 50))
+        st = st.resize((max(1, int(300 * k)), max(1, int(110 * k))), Image.LANCZOS).rotate(-10, expand=True, resample=Image.BICUBIC)
+        L.alpha_composite(st, (int(820 - st.width / 2), int(BY0 + 70 - st.height / 2)))
+    if lt > max(2.2, dur * 0.55):
+        t = args.get("reply", "कंपनी: पानी सुरक्षित")
+        k = _ease((lt - max(2.2, dur * 0.55)) / 0.4)
+        w = d.textlength(t, font=f) + 40
+        x0 = 810 - w / 2
+        d.rounded_rectangle([x0, BY1 - 105, x0 + w, BY1 - 45], 28, fill=(60, 160, 230, int(240 * k)))
+        d.text((x0 + 20, BY1 - 103), t, font=f, fill=(255, 255, 255, int(255 * k)))
+
+
+def courtlist(L, lt, dur, fonts, args):
+    """Gavel striking + voter list where struck-out names get restored (ticks)."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    # list sheet
+    x0, y0, x1, y1 = 520, BY0 - 10, 900, BY1 - 10
+    d.rounded_rectangle([x0, y0, x1, y1], 16, fill=(245, 240, 228))
+    d.text((x0 + 20, y0 + 6), args.get("title", "वोटर लिस्ट"), font=f, fill=(40, 40, 60))
+    rows = 4
+    for r in range(rows):
+        y = y0 + 80 + r * 50
+        d.ellipse([x0 + 22, y, x0 + 52, y + 30], fill=(150, 150, 170))
+        d.rectangle([x0 + 70, y + 8, x1 - 80, y + 22], fill=(170, 165, 150))
+        restored = lt > 0.9 + r * 0.45
+        if not restored:
+            d.line([(x0 + 60, y + 15), (x1 - 70, y + 15)], fill=(220, 40, 50), width=6)
+        else:
+            k = _back(min(1, (lt - 0.9 - r * 0.45) / 0.3))
+            d.line([(x1 - 60, y + 15), (x1 - 48, y + 15 + 12 * k), (x1 - 25, y + 15 - 16 * k)], fill=(40, 170, 90), width=7)
+    # gavel (strikes at start and every ~1.6 s)
+    ph = (lt % 1.6)
+    down = ph < 0.15
+    ang = -0.15 if down else -0.85
+    hx, hy = 330, BY1 - 70
+    tx, ty = hx - 200 * math.cos(ang), hy + 200 * math.sin(ang) - 10
+    d.rectangle([150, BY1 - 40, 420, BY1 - 10], fill=(140, 95, 55))
+    d.line([(hx, hy), (tx, ty)], fill=(160, 110, 60), width=16)
+    d.rounded_rectangle([tx - 55, ty - 32, tx + 55, ty + 32], 10, fill=(120, 80, 45))
+    if down:
+        for k in range(6):
+            a = math.pi + k * math.pi / 5
+            d.line([(260 + 40 * math.cos(a), BY1 - 45 + 25 * math.sin(a)), (260 + 80 * math.cos(a), BY1 - 45 + 50 * math.sin(a))], fill=(255, 196, 0), width=5)
+
+
+def aichip(L, lt, dur, fonts, args):
+    """Glowing chip with circuit traces pulsing, plus a bar shooting up with a value tag."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    cx, cy, s = 330, CY, 110
+    for k in range(6):
+        for side in (-1, 1):
+            y = cy - s + 20 + k * 36
+            d.line([(cx + side * s, y), (cx + side * (s + 55), y)], fill=(255, 196, 0), width=6)
+            x = cx - s + 20 + k * 36
+            d.line([(x, cy + side * s), (x, cy + side * (s + 55))], fill=(255, 196, 0), width=6)
+    g = 0.5 + 0.5 * math.sin(lt * 4)
+    d.rounded_rectangle([cx - s, cy - s, cx + s, cy + s], 20, fill=(30, 40, 70), outline=(120, 200, 255, int(150 + 100 * g)), width=6)
+    d.text((cx - d.textlength("AI", font=fonts["mid"]) / 2, cy - 80), "AI", font=fonts["mid"], fill=(120, 200, 255))
+    for k in range(4):
+        ph = (lt * 0.8 + k / 4) % 1
+        x = cx + s + 55 + 0 * ph
+        d.ellipse([cx + s + 55 - 6 + 0, cy - s + 20 + k * 36 * 1.0 - 6, cx + s + 55 + 6, cy - s + 20 + k * 36 + 6], fill=(255, 240, 150, int(255 * (1 - ph))))
+    # bars
+    for i, (frac, lab, col) in enumerate(((0.5, args.get("a", "2025"), (120, 130, 170)), (0.98, args.get("b", "2026"), (60, 200, 120)))):
+        x = 690 + i * 170
+        p = _ease((lt - 0.3 - 0.4 * i) / 1.0)
+        h = (BY1 - BY0 - 60) * frac * p
+        d.rounded_rectangle([x - 55, BY1 - 40 - h, x + 55, BY1 - 40], 10, fill=col)
+        d.text((x - d.textlength(lab, font=f) / 2, BY1 - 35), lab, font=f, fill=(220, 220, 235))
+    if lt > 1.3:
+        t = args.get("tag", "+96%")
+        d.rounded_rectangle([760, BY0 - 20, 760 + d.textlength(t, font=f) + 40, BY0 + 40], 28, fill=(60, 200, 120))
+        d.text((780, BY0 - 18), t, font=f, fill=(255, 255, 255))
+
+
+def numpick(L, lt, dur, fonts, args):
+    """Five numbered buttons popping in, one pulsing (comment the number)."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["mid"]
+    for i in range(5):
+        k = _back((lt - 0.12 * i) / 0.35)
+        if k <= 0:
+            continue
+        cx = 160 + i * 190
+        pulse = 1 + (0.12 * math.sin(lt * 7) if int(lt / 0.7) % 5 == i else 0)
+        r = 72 * k * pulse
+        d.ellipse([cx - r, CY - r, cx + r, CY + r], fill=(255, 196, 0) if int(lt / 0.7) % 5 == i else (60, 50, 90),
+                  outline=(255, 255, 255), width=4)
+        t = str(i + 1)
+        if k > 0.7:
+            d.text((cx - d.textlength(t, font=f) / 2, CY - 82), t, font=f, fill=(20, 15, 30) if int(lt / 0.7) % 5 == i else (255, 255, 255))
+
+
+ANIMS.update({"bottle": bottle, "courtlist": courtlist, "aichip": aichip, "numpick": numpick})

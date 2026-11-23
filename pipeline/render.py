@@ -210,14 +210,20 @@ def frame(t):
 
 VOICE = data.get("audio") and os.path.join(os.path.dirname(os.path.abspath(script)), data["audio"]) or os.path.join(build, "voice.wav")
 cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-i", VOICE]
+extras = []   # (wav path, volume) mixed under the voice
 if INTRO == "rocket":
-    # launch sound under the voice: voice normalised first, SFX at a fixed level below it, then a limiter
-    sfx = intro_rocket.make_sfx(os.path.join(build, "rocket_sfx.wav"))
-    vol = data.get("sfx_volume", 0.32)
-    cmd += ["-i", sfx, "-filter_complex",
-            f"[1:a]aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[v];"
-            f"[2:a]volume={vol}[s];[v][s]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,apad[a]",
-            "-map", "0:v", "-map", "[a]", "-shortest"]
+    extras.append((intro_rocket.make_sfx(os.path.join(build, "rocket_sfx.wav")), data.get("sfx_volume", 0.32)))
+if any(sc.get("sfx") for sc in data["scenes"]):
+    import sfx as SFX
+    extras.append((SFX.make_track(data["scenes"], tim["scenes"], tim["total"], os.path.join(build, "sfx_track.wav")), data.get("fx_volume", 0.35)))
+if extras:
+    fc = "[1:a]aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[v];"
+    labs = "[v]"
+    for k, (path, vol) in enumerate(extras):
+        cmd += ["-i", path]
+        fc += f"[{k + 2}:a]volume={vol}[s{k}];"; labs += f"[s{k}]"
+    fc += f"{labs}amix=inputs={len(extras) + 1}:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,apad[a]"
+    cmd += ["-filter_complex", fc, "-map", "0:v", "-map", "[a]", "-shortest"]
 else:
     cmd += ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11,apad", "-shortest"]
 cmd += [
