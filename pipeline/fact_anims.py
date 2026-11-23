@@ -319,7 +319,7 @@ def draw(im, name, lt, dur, alpha, fonts, args=None, sprite=None):
         fn(L, lt, dur, fonts, args or {}, sprite=sprite)
     else:
         fn(L, lt, dur, fonts, args or {})
-    a = max(0.0, min(1.0, alpha)) * (1.0 if (name == "leaders" or (args or {}).get("instant")) else _ease(lt / 0.25))   # hook visuals: visible at frame 0
+    a = max(0.0, min(1.0, alpha)) * (1.0 if (name in ("leaders", "office") or (args or {}).get("instant")) else _ease(lt / 0.25))   # hook visuals: visible at frame 0
     if a < 1:
         L.putalpha(L.getchannel("A").point(lambda v: int(v * a)))
     out = im.convert("RGBA")
@@ -599,3 +599,150 @@ def poll(L, lt, dur, fonts, args):
 
 
 ANIMS.update({"scoreboard": scoreboard, "six": six, "stumps": stumps, "batcount": batcount, "trophy": trophy, "poll": poll})
+
+
+# ================================================================ politics / social-media set
+def _person(d, x, y, s, col, sign=None, t=0.0, k=0):
+    bob = 6 * math.sin(t * 7 + k)
+    d.ellipse([x - 16 * s, y - 120 * s + bob, x + 16 * s, y - 88 * s + bob], fill=col)
+    d.rounded_rectangle([x - 20 * s, y - 86 * s + bob, x + 20 * s, y - 20 * s + bob], 10, fill=col)
+    d.line([(x - 10 * s, y - 20 * s + bob), (x - 12 * s, y)], fill=col, width=int(9 * s))
+    d.line([(x + 10 * s, y - 20 * s + bob), (x + 12 * s, y)], fill=col, width=int(9 * s))
+    if sign:
+        up = 10 * math.sin(t * 8 + k * 1.3)
+        d.line([(x + 18 * s, y - 70 * s + bob), (x + 30 * s, y - 150 * s + up)], fill=(150, 110, 70), width=5)
+        d.rectangle([x - 5 * s, y - 200 * s + up, x + 70 * s, y - 145 * s + up], fill=sign)
+
+
+def office(L, lt, dur, fonts, args):
+    """Glass office building with a crowd waving placards in front (visible from frame 0)."""
+    d = ImageDraw.Draw(L, "RGBA")
+    bx0, bx1, top, base = 340, 740, BY0 - 40, BY1 - 10
+    d.rectangle([bx0, top, bx1, base], fill=(60, 90, 130))
+    for r in range(6):
+        for c in range(6):
+            on = (r * 3 + c + int(lt * 3)) % 7 != 0
+            x = bx0 + 22 + c * 63; y = top + 18 + r * 42
+            d.rectangle([x, y, x + 44, y + 28], fill=(150, 200, 240) if on else (90, 120, 160))
+    d.rectangle([bx0 + 160, base - 60, bx1 - 160, base], fill=(30, 40, 60))
+    for k in range(9):
+        x = 150 + k * 100
+        if bx0 + 30 < x < bx1 - 30 and k % 2 == 0:
+            continue
+        _person(d, x, base + 5, 0.9, (235, 235, 245), sign=((255, 255, 255) if k % 3 else (230, 50, 60)), t=lt, k=k)
+
+
+def citypins(L, lt, dur, fonts, args):
+    """Three city pins dropping one after another, labels under each, badge at the end."""
+    d = ImageDraw.Draw(L, "RGBA")
+    cities = args.get("cities", ["हैदराबाद", "मुंबई", "गुरुग्राम"])
+    f = fonts["small"]
+    for i, name in enumerate(cities):
+        x = 230 + i * 310
+        p = _back((lt - 0.35 * i) / 0.5)
+        if p <= 0:
+            continue
+        y = BY0 + 150 - 220 * (1 - p)
+        d.ellipse([x - 45, y - 140, x + 45, y - 50], fill=(230, 50, 70))
+        d.polygon([(x - 40, y - 80), (x, y), (x + 40, y - 80)], fill=(230, 50, 70))
+        d.ellipse([x - 18, y - 113, x + 18, y - 77], fill=(255, 255, 255))
+        d.text((x - d.textlength(name, font=f) / 2, BY0 + 165), name, font=f, fill=(255, 255, 255))
+    if lt > 1.3 and args.get("badge"):
+        k = _back((lt - 1.3) / 0.4)
+        t = args["badge"]
+        w = d.textlength(t, font=f) + 50
+        d.rounded_rectangle([540 - w / 2 * k, BY1 - 55, 540 + w / 2 * k, BY1 + 15], 30, fill=(255, 196, 0))
+        if k > 0.9:
+            d.text((540 - d.textlength(t, font=f) / 2, BY1 - 52), t, font=f, fill=(20, 15, 30))
+
+
+def phoneflip(L, lt, dur, fonts, args):
+    """Generic phone (no brand): profile with 'removed' banner, then flips to 'restored'."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    flip = max(1.4, dur * 0.55)
+    for j, x in enumerate((370, 710)):
+        restored = lt > flip + 0.15 * j
+        sq = abs(math.cos(min(1, max(0, (lt - flip - 0.15 * j) / 0.4)) * math.pi)) if lt > flip + 0.15 * j - 0.2 and lt < flip + 0.15 * j + 0.4 else 1
+        w = max(14, 120 * sq)
+        d.rounded_rectangle([x - w, BY0 - 10, x + w, BY1 + 10], 26, fill=(25, 25, 35))
+        d.rounded_rectangle([x - w + 10, BY0 + 5, x + w - 10, BY1 - 5], 18, fill=(245, 245, 250))
+        if sq > 0.5:
+            d.ellipse([x - 40, BY0 + 30, x + 40, BY0 + 110], fill=(200, 200, 215))
+            d.ellipse([x - 16, BY0 + 42, x + 16, BY0 + 74], fill=(150, 150, 170))
+            d.rounded_rectangle([x - 30, BY0 + 76, x + 30, BY0 + 106], 14, fill=(150, 150, 170))
+            col = (60, 180, 110) if restored else (220, 50, 60)
+            lab = args.get("ok", "वापस आया") if restored else args.get("bad", "हटाया गया")
+            d.rounded_rectangle([x - 100, BY0 + 140, x + 100, BY0 + 200], 14, fill=col)
+            d.text((x - d.textlength(lab, font=f) / 2, BY0 + 142), lab, font=f, fill=(255, 255, 255))
+            for r in range(2):
+                d.rectangle([x - 90, BY0 + 220 + r * 18, x + 60 - r * 40, BY0 + 230 + r * 18], fill=(210, 210, 220))
+
+
+def lockwall(L, lt, dur, fonts, args):
+    """Grid of profile icons, padlocks snapping on one by one."""
+    d = ImageDraw.Draw(L, "RGBA")
+    cols, rows = 9, 3
+    n = cols * rows
+    shown = n * _ease(lt / 1.8)
+    for i in range(n):
+        r, c = divmod(i, cols)
+        x = 140 + c * 100; y = BY0 + 40 + r * 90
+        d.ellipse([x - 32, y - 32, x + 32, y + 32], fill=(90, 90, 120))
+        d.ellipse([x - 11, y - 20, x + 11, y + 2], fill=(170, 170, 200))
+        d.pieslice([x - 20, y + 2, x + 20, y + 40], 180, 360, fill=(170, 170, 200))
+        if i < shown:
+            k = _back(min(1, shown - i))
+            lx, ly = x + 18, y + 14
+            d.arc([lx - 11 * k, ly - 22 * k, lx + 11 * k, ly], 180, 360, fill=(255, 196, 0), width=5)
+            d.rounded_rectangle([lx - 15 * k, ly - 9 * k, lx + 15 * k, ly + 13 * k], 4, fill=(255, 196, 0))
+
+
+def splitsides(L, lt, dur, fonts, args):
+    """Two panels sliding in from left and right with labels and a VS badge."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    p = _ease(lt / 0.5)
+    A, B = args.get("a", "आरोप"), args.get("b", "जवाब")
+    ca, cb = tuple(args.get("ca", (40, 120, 220))), tuple(args.get("cb", (255, 140, 40)))
+    w = 430
+    xa = -w + (90 + w) * p; xb = W - (90 + w) * p
+    d.rounded_rectangle([xa, BY0 + 20, xa + w, BY1 - 20], 26, fill=ca + (230,))
+    d.rounded_rectangle([xb, BY0 + 20, xb + w, BY1 - 20], 26, fill=cb + (230,))
+    d.text((xa + w / 2 - d.textlength(A, font=f) / 2, BY0 + 50), A, font=f, fill=(255, 255, 255))
+    d.text((xb + w / 2 - d.textlength(B, font=f) / 2, BY0 + 50), B, font=f, fill=(255, 255, 255))
+    # megaphone / shield icons
+    mx, my = xa + w / 2, BY0 + 170
+    d.polygon([(mx - 60, my - 22), (mx + 20, my - 60), (mx + 20, my + 60), (mx - 60, my + 22)], fill=(255, 255, 255))
+    for k in range(3):
+        ph = (lt * 1.2 + k / 3) % 1
+        d.arc([mx + 10 - 30 * ph - 20, my - 40 - 40 * ph, mx + 50 + 40 * ph, my + 40 + 40 * ph], 300, 60, fill=(255, 255, 255, int(255 * (1 - ph))), width=5)
+    sx, sy = xb + w / 2, BY0 + 170
+    d.polygon([(sx - 55, sy - 60), (sx + 55, sy - 60), (sx + 55, sy), (sx, sy + 65), (sx - 55, sy)], fill=(255, 255, 255))
+    d.text((sx - d.textlength("§", font=f) / 2, sy - 45), "§", font=f, fill=cb)
+    if p > 0.95:
+        r = 52 * (1 + 0.08 * math.sin(lt * 6))
+        d.ellipse([540 - r, CY - r, 540 + r, CY + r], fill=(20, 15, 30), outline=(255, 196, 0), width=5)
+        d.text((540 - d.textlength("VS", font=f) / 2, CY - 30), "VS", font=f, fill=(255, 196, 0))
+
+
+def growbars(L, lt, dur, fonts, args):
+    """Two bars: tiny 'before' bar, then a huge 'after' bar shooting up with a counter."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    items = args.get("items", [["2025", 0.013, "~70 हज़ार"], ["2026 (6 महीने)", 1.0, "54 लाख+"]])
+    hmax = BY1 - BY0 - 70
+    for i, (lab, frac, val) in enumerate(items):
+        x = 330 + i * 400
+        p = _ease((lt - 0.2 - 0.6 * i) / 1.2)
+        h = max(6, hmax * frac * p)
+        col = (120, 130, 170) if i == 0 else (230, 50, 60)
+        d.rounded_rectangle([x - 70, BY1 - 40 - h, x + 70, BY1 - 40], 10, fill=col)
+        d.text((x - d.textlength(lab, font=f) / 2, BY1 - 35), lab, font=f, fill=(200, 196, 215))
+        if p > 0.3:
+            vy = BY1 - 40 - h - 55
+            d.text((x - d.textlength(val, font=f) / 2, vy), val, font=f, fill=(255, 255, 255), stroke_width=3, stroke_fill=(0, 0, 0))
+
+
+ANIMS.update({"office": office, "citypins": citypins, "phoneflip": phoneflip, "lockwall": lockwall,
+              "splitsides": splitsides, "growbars": growbars})
