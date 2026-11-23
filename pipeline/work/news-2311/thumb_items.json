@@ -1,0 +1,8 @@
+{"date": "23 नवंबर 2026", "title1": "आज की 5", "title2": "बड़ी ख़बरें!",
+ "items": [
+  {"text": "सेंसेक्स −1,484", "sub": "शेयर बाज़ार धड़ाम", "icon": "down", "color": "red"},
+  {"text": "बिसलेरी पर केस!", "sub": "FSSAI: पानी का सैंपल फ़ेल", "icon": "bottle", "color": "blue"},
+  {"text": "22 लाख अपीलें", "sub": "बंगाल वोटर लिस्ट पर SC", "icon": "gavel", "color": "purple"},
+  {"text": "720 रन, फिर भी ड्रॉ", "sub": "भारत vs न्यूज़ीलैंड टेस्ट", "icon": "cricket", "color": "green"},
+  {"text": "AI में $1.6 अरब", "sub": "निवेश लगभग दोगुना", "icon": "chip", "color": "orange"}
+ ]}
