@@ -319,7 +319,7 @@ def draw(im, name, lt, dur, alpha, fonts, args=None, sprite=None):
         fn(L, lt, dur, fonts, args or {}, sprite=sprite)
     else:
         fn(L, lt, dur, fonts, args or {})
-    a = max(0.0, min(1.0, alpha)) * (1.0 if (name in ("leaders", "office") or (args or {}).get("instant")) else _ease(lt / 0.25))   # hook visuals: visible at frame 0
+    a = max(0.0, min(1.0, alpha)) * (1.0 if (name in ("leaders", "office", "candlecrash") or (args or {}).get("instant")) else _ease(lt / 0.25))   # hook visuals: visible at frame 0
     if a < 1:
         L.putalpha(L.getchannel("A").point(lambda v: int(v * a)))
     out = im.convert("RGBA")
@@ -746,3 +746,163 @@ def growbars(L, lt, dur, fonts, args):
 
 ANIMS.update({"office": office, "citypins": citypins, "phoneflip": phoneflip, "lockwall": lockwall,
               "splitsides": splitsides, "growbars": growbars})
+
+
+# ================================================================ markets set
+RED_C, GRN_C = (235, 60, 70), (60, 200, 120)
+
+
+def _arrow_down(d, x, y, s, col):
+    d.rectangle([x - 12 * s, y - 50 * s, x + 12 * s, y + 5 * s], fill=col)
+    d.polygon([(x - 32 * s, y), (x + 32 * s, y), (x, y + 40 * s)], fill=col)
+
+
+def candlecrash(L, lt, dur, fonts, args):
+    """Candlestick chart: a few green candles then a run of red ones crashing; visible at frame 0."""
+    d = ImageDraw.Draw(L, "RGBA")
+    d.line([(90, BY1), (990, BY1)], fill=(255, 255, 255, 70), width=3)
+    seq = [(0.55, 0.62), (0.62, 0.70), (0.70, 0.78), (0.78, 0.74), (0.74, 0.60), (0.60, 0.45), (0.45, 0.30), (0.30, 0.12)]
+    n = 3 + int(min(5, (lt / 0.25)))
+    for i, (o, c) in enumerate(seq[:n]):
+        x = 150 + i * 105
+        y = lambda v: BY1 - 10 - v * (BY1 - BY0 - 30)
+        col = GRN_C if c > o else RED_C
+        hi, lo = max(o, c) + 0.05, min(o, c) - 0.05
+        d.line([(x, y(hi)), (x, y(lo))], fill=col, width=4)
+        top, bot = y(max(o, c)), y(min(o, c))
+        d.rectangle([x - 28, top, x + 28, max(bot, top + 6)], fill=col)
+    if n >= 8:
+        p = (lt % 0.8) / 0.8
+        _arrow_down(d, 960, BY0 + 80 + 30 * p, 1.4, RED_C)
+
+
+def ticker(L, lt, dur, fonts, args):
+    """Index board counting down from a start value to the close, with a red change pill."""
+    d = ImageDraw.Draw(L, "RGBA")
+    a, b = float(args.get("from", 83919.71)), float(args.get("to", 82435.99))
+    p = _ease(lt / 1.8)
+    v = a + (b - a) * p
+    x0, x1, y0, y1 = 170, 910, BY0 + 10, BY1 - 20
+    d.rounded_rectangle([x0, y0, x1, y1], 24, fill=(20, 22, 34), outline=(255, 255, 255, 60), width=3)
+    f, fs = fonts["mid"], fonts["small"]
+    lab = args.get("label", "SENSEX")
+    d.text((x0 + 40, y0 + 22), lab, font=fs, fill=(200, 196, 215))
+    t = f"{v:,.0f}"
+    d.text((x0 + 40, y0 + 80), t, font=f, fill=RED_C if p > 0.05 else (255, 255, 255))
+    ch = args.get("change", "−1,484  (−1.77%)")
+    if p > 0.6:
+        w = d.textlength(ch, font=fs) + 40
+        d.rounded_rectangle([x1 - w - 30, y0 + 20, x1 - 30, y0 + 80], 30, fill=RED_C)
+        d.text((x1 - w - 10, y0 + 22), ch, font=fs, fill=(255, 255, 255))
+    _arrow_down(d, x1 - 90, y1 - 90 + 10 * math.sin(lt * 6), 1.2, RED_C)
+
+
+def linecrash(L, lt, dur, fonts, args):
+    """Intraday line: rises to the day's high (marked), then plunges; dashed open line for reference."""
+    d = ImageDraw.Draw(L, "RGBA")
+    pts_v = [0.45, 0.55, 0.72, 0.85, 0.80, 0.70, 0.55, 0.40, 0.28, 0.18, 0.12]
+    X = lambda i: 120 + i * 84
+    Y = lambda v: BY1 - 10 - v * (BY1 - BY0 - 40)
+    for k in range(0, 900, 30):
+        d.line([(120 + k, Y(0.45)), (135 + k, Y(0.45))], fill=(255, 255, 255, 80), width=3)
+    prog = _ease(lt / 2.2) * (len(pts_v) - 1)
+    pts = []
+    for i in range(len(pts_v)):
+        if i <= prog:
+            pts.append((X(i), Y(pts_v[i])))
+        else:
+            fr = prog - (i - 1)
+            if fr > 0:
+                pts.append((X(i - 1) + (X(i) - X(i - 1)) * fr, Y(pts_v[i - 1] + (pts_v[i] - pts_v[i - 1]) * fr)))
+            break
+    for i in range(len(pts) - 1):
+        col = GRN_C if pts[i + 1][1] <= pts[i][1] else RED_C
+        d.line([pts[i], pts[i + 1]], fill=col, width=9)
+    if len(pts) > 0:
+        x, y = pts[-1]; d.ellipse([x - 12, y - 12, x + 12, y + 12], fill=(255, 255, 255))
+    if prog >= 3:
+        hx, hy = X(3), Y(0.85)
+        f = fonts["small"]
+        t = args.get("high", "HIGH 84,663")
+        d.rounded_rectangle([hx - 10, hy - 75, hx + d.textlength(t, font=f) + 20, hy - 15], 14, fill=(60, 200, 120, 230))
+        d.text((hx + 5, hy - 73), t, font=f, fill=(255, 255, 255))
+
+
+def moneybag(L, lt, dur, fonts, args):
+    """Money bag with notes flying out and the bag shrinking; label below."""
+    d = ImageDraw.Draw(L, "RGBA")
+    s = 1.0 - 0.35 * _ease(lt / 2.5)
+    cx, cy = 420, CY + 10
+    d.ellipse([cx - 120 * s, cy - 90 * s, cx + 120 * s, cy + 130 * s], fill=(200, 150, 60))
+    d.polygon([(cx - 40 * s, cy - 85 * s), (cx + 40 * s, cy - 85 * s), (cx + 60 * s, cy - 140 * s), (cx - 60 * s, cy - 140 * s)], fill=(200, 150, 60))
+    d.rectangle([cx - 45 * s, cy - 95 * s, cx + 45 * s, cy - 80 * s], fill=(120, 80, 30))
+    f = fonts["mid"]
+    d.text((cx - d.textlength("₹", font=f) / 2, cy - 60 * s), "₹", font=f, fill=(255, 240, 180))
+    for k in range(7):
+        ph = (lt * 0.9 + k / 7) % 1
+        x = cx + 80 + 420 * ph; y = cy - 100 - 120 * math.sin(ph * math.pi) + 60 * ph
+        ang = ph * 6 + k
+        w, h = 70, 36
+        pts = [(x + w / 2 * math.cos(ang) * sx - h / 2 * math.sin(ang) * sy, y + w / 2 * math.sin(ang) * sx + h / 2 * math.cos(ang) * sy)
+               for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        d.polygon(pts, fill=(110, 190, 110, int(255 * (1 - ph))))
+    t = args.get("label", "₹3 लाख करोड़+")
+    fs = fonts["small"]
+    d.rounded_rectangle([640, BY1 - 75, 640 + d.textlength(t, font=fs) + 40, BY1 - 15], 28, fill=RED_C)
+    d.text((660, BY1 - 73), t, font=fs, fill=(255, 255, 255))
+
+
+def sectordown(L, lt, dur, fonts, args):
+    """Bank building and a steel I-beam, each with a red down arrow and % label."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    p = _back(lt / 0.5)
+    # bank
+    bx, base = 330, BY1 - 20
+    d.polygon([(bx - 150 * p, base - 190 * p), (bx, base - 260 * p), (bx + 150 * p, base - 190 * p)], fill=(230, 230, 240))
+    for k in range(5):
+        x = bx - 120 * p + k * 60 * p
+        d.rectangle([x - 12 * p, base - 180 * p, x + 12 * p, base - 30 * p], fill=(230, 230, 240))
+    d.rectangle([bx - 160 * p, base - 30 * p, bx + 160 * p, base], fill=(230, 230, 240))
+    # steel beam
+    sx = 760
+    d.rectangle([sx - 140 * p, base - 200 * p, sx + 140 * p, base - 175 * p], fill=(160, 170, 185))
+    d.rectangle([sx - 18 * p, base - 175 * p, sx + 18 * p, base - 55 * p], fill=(160, 170, 185))
+    d.rectangle([sx - 140 * p, base - 55 * p, sx + 140 * p, base - 30 * p], fill=(160, 170, 185))
+    for x in (bx, sx):
+        y = BY0 + 20 + 14 * math.sin(lt * 5)
+        if lt > 0.5:
+            _arrow_down(d, x + 150, y + 60, 1.0, RED_C)
+    for x, t in ((bx, args.get("a", "बैंक")), (sx, args.get("b", "मेटल"))):
+        d.text((x - d.textlength(t, font=f) / 2, base - 5), t, font=f, fill=(255, 255, 255))
+
+
+def causes(L, lt, dur, fonts, args):
+    """Three cause cards popping in sequence: profit booking, US rates, rupee."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    labels = args.get("labels", ["मुनाफ़ावसूली", "US ब्याज़ दर", "₹93/$"])
+    per = max(0.8, (dur - 0.5) / 3)
+    for i, t in enumerate(labels):
+        k = _back((lt - per * i * 0.85) / 0.4)
+        if k <= 0:
+            continue
+        cx = 210 + i * 330
+        w, h = 140 * k, 120 * k
+        d.rounded_rectangle([cx - w, CY - h, cx + w, CY + h], 22, fill=(35, 30, 55), outline=(255, 196, 0), width=4)
+        iy = CY - 40 * k
+        if i == 0:      # hand taking coins: up arrow then coins
+            for j in range(3):
+                d.ellipse([cx - 40 + j * 28 - 18 * k, iy - 18 * k + j * 6, cx - 40 + j * 28 + 18 * k, iy + 18 * k + j * 6], fill=(255, 196, 0))
+        elif i == 1:    # percent with up arrow
+            d.text((cx - 50 * k, iy - 55 * k), "%", font=fonts["mid"], fill=(255, 120, 120)) if k > 0.6 else None
+            d.polygon([(cx + 40, iy - 40), (cx + 70, iy), (cx + 10, iy)], fill=RED_C)
+        else:           # rupee falling
+            d.text((cx - 25, iy - 60), "₹", font=fonts["mid"], fill=(255, 255, 255)) if k > 0.6 else None
+            _arrow_down(d, cx + 60, iy - 10, 0.7, RED_C)
+        if k > 0.8:
+            d.text((cx - d.textlength(t, font=f) / 2, CY + 50), t, font=f, fill=(255, 255, 255))
+
+
+ANIMS.update({"candlecrash": candlecrash, "ticker": ticker, "linecrash": linecrash, "moneybag": moneybag,
+              "sectordown": sectordown, "causes": causes})
