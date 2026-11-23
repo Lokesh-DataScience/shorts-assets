@@ -319,7 +319,7 @@ def draw(im, name, lt, dur, alpha, fonts, args=None, sprite=None):
         fn(L, lt, dur, fonts, args or {}, sprite=sprite)
     else:
         fn(L, lt, dur, fonts, args or {})
-    a = max(0.0, min(1.0, alpha)) * (1.0 if name == "leaders" else _ease(lt / 0.25))   # hook visuals: visible at frame 0
+    a = max(0.0, min(1.0, alpha)) * (1.0 if (name == "leaders" or (args or {}).get("instant")) else _ease(lt / 0.25))   # hook visuals: visible at frame 0
     if a < 1:
         L.putalpha(L.getchannel("A").point(lambda v: int(v * a)))
     out = im.convert("RGBA")
@@ -420,3 +420,182 @@ def longthumb(L, lt, dur, fonts, args):
 
 ANIMS.update({"pin": pin, "treaty": treaty, "stamp": stamp, "missiles": missiles, "hormuz": hormuz,
               "leaders": leaders, "longthumb": longthumb})
+
+
+# ================================================================ cricket set
+def scoreboard(L, lt, dur, fonts, args):
+    """Dark scoreboard whose runs tick up to the target, wickets and 'DECLARED' stamp."""
+    d = ImageDraw.Draw(L, "RGBA")
+    runs, wk = int(args.get("runs", 720)), int(args.get("wkts", 9))
+    x0, y0, x1, y1 = 240, BY0 + 10, 840, BY1 - 20
+    d.rounded_rectangle([x0 - 10, y0 - 10, x1 + 10, y1 + 10], 22, fill=(255, 196, 0))
+    d.rounded_rectangle([x0, y0, x1, y1], 16, fill=(18, 40, 28))
+    p = 1.0 if args.get("instant") else _ease(lt / 1.6)
+    cur = int(runs * p)
+    f = fonts["mid"]
+    t = f"{cur}/{min(wk, int(wk * p + 0.5))}"
+    d.text((540 - d.textlength(t, font=f) / 2, y0 + 30), t, font=f, fill=(255, 235, 120))
+    lab = args.get("label", "INDIA")
+    fs = fonts["small"]
+    if lt <= 1.7 or not args.get("stamp", "DECLARED"):
+        d.text((540 - d.textlength(lab, font=fs) / 2, y0 + 175), lab, font=fs, fill=(200, 230, 210))
+    if lt > 1.7 and args.get("stamp", "DECLARED"):
+        k = _back((lt - 1.7) / 0.35)
+        st = Image.new("RGBA", (420, 110), (0, 0, 0, 0)); sd = ImageDraw.Draw(st)
+        sd.rounded_rectangle([4, 4, 416, 106], 14, outline=(230, 40, 50), width=8)
+        tt = args.get("stamp", "DECLARED")
+        sd.text((210 - sd.textlength(tt, font=fs) / 2, 26), tt, font=fs, fill=(230, 40, 50))
+        st = st.resize((max(1, int(320 * k)), max(1, int(84 * k))), Image.LANCZOS).rotate(-4, expand=True, resample=Image.BICUBIC)
+        L.alpha_composite(st, (int(540 - st.width / 2), int(y0 + 212 - st.height / 2)))
+
+
+def _bat(d, x, y, ang, s=1.0):
+    ca, sa = math.cos(ang), math.sin(ang)
+    def P(px, py): return (x + px * ca - py * sa, y + px * sa + py * ca)
+    d.polygon([P(-7 * s, 0), P(7 * s, 0), P(7 * s, 60 * s), P(-7 * s, 60 * s)], fill=(30, 30, 40))      # handle
+    d.polygon([P(-22 * s, 60 * s), P(22 * s, 60 * s), P(20 * s, 220 * s), P(0, 232 * s), P(-20 * s, 220 * s)], fill=(235, 205, 150))
+    d.line([P(0, 75 * s), P(0, 215 * s)], fill=(210, 175, 120), width=3)
+
+
+def _ball(d, x, y, r=18):
+    d.ellipse([x - r, y - r, x + r, y + r], fill=(200, 30, 40))
+    d.arc([x - r * 0.6, y - r, x + r * 0.6, y + r], 70, 290, fill=(255, 235, 235), width=2)
+
+
+def six(L, lt, dur, fonts, args):
+    """Bat swings, ball arcs over a boundary rope; a SIX counter ticks up to n."""
+    d = ImageDraw.Draw(L, "RGBA")
+    n = int(args.get("n", 6))
+    period = max(0.6, min(1.1, (dur - 0.5) / max(1, n)))
+    k = min(n, int(lt / period) + 1)
+    ph = (lt % period) / period
+    # boundary rope (arc) + grass
+    d.arc([520, BY0 + 60, 1240, BY1 + 380], 185, 265, fill=(255, 255, 255, 180), width=8)
+    d.rectangle([60, BY1 - 18, 1020, BY1 - 8], fill=(60, 150, 70, 160))
+    bx, by = 230, BY1 - 40
+    swing = -1.9 + 2.6 * _ease(min(1, ph / 0.25))
+    _bat(d, bx, by - 180, swing, 0.85)
+    if ph > 0.2:
+        u = (ph - 0.2) / 0.8
+        x = bx + 60 + 720 * u
+        y = by - 120 - 300 * math.sin(math.pi * min(1, u * 0.9))
+        for j in range(1, 6):
+            uu = max(0, u - j * 0.03)
+            tx = bx + 60 + 720 * uu; ty = by - 120 - 300 * math.sin(math.pi * min(1, uu * 0.9))
+            d.ellipse([tx - 10 + j, ty - 10 + j, tx + 10 - j, ty + 10 - j], fill=(255, 200, 60, 140 - j * 22))
+        _ball(d, x, y)
+    f = fonts["small"]
+    t = f"6 x {k}"
+    d.rounded_rectangle([780, BY0 - 5, 1010, BY0 + 75], 20, fill=(255, 196, 0))
+    d.text((895 - d.textlength(t, font=f) / 2, BY0 + 4), t, font=f, fill=(20, 15, 30))
+
+
+def stumps(L, lt, dur, fonts, args):
+    """Ball zips in, stumps and bails fly. Repeats twice (both innings)."""
+    d = ImageDraw.Draw(L, "RGBA")
+    reps = int(args.get("reps", 2))
+    period = max(1.4, (dur - 0.3) / reps)
+    ph = (lt % period) / period
+    base = BY1 - 15
+    hit = 0.35
+    for i, sx in enumerate((500, 540, 580)):
+        if ph < hit:
+            ang, ox, oy = 0, 0, 0
+        else:
+            u = (ph - hit) / (1 - hit)
+            ang = (0.5 + 0.35 * (i - 1)) * _ease(u * 1.5) * (1 if i else -0.4)
+            ox, oy = 30 * (i - 1) * u, 0
+        ca, sa = math.cos(ang), math.sin(ang)
+        h = 230
+        top = (sx + ox + h * sa, base - h * ca)
+        d.line([(sx + ox, base), top], fill=(245, 230, 200), width=16)
+    # bails
+    if ph < hit:
+        d.rectangle([494, base - 238, 586, base - 228], fill=(230, 200, 140))
+    else:
+        u = (ph - hit) / (1 - hit)
+        for j, dx in enumerate((-1, 1)):
+            x = 540 + dx * (40 + 260 * u); y = base - 235 - 300 * u + 520 * u * u
+            ang = u * 9 * dx
+            ln = 46
+            d.line([(x - ln / 2 * math.cos(ang), y - ln / 2 * math.sin(ang)), (x + ln / 2 * math.cos(ang), y + ln / 2 * math.sin(ang))],
+                   fill=(230, 200, 140), width=10)
+        for k in range(10):
+            a = k * math.pi / 5
+            r = 60 + 140 * u
+            d.line([(540 + r * 0.6 * math.cos(a), base - 140 + r * 0.6 * math.sin(a)), (540 + r * math.cos(a), base - 140 + r * math.sin(a))],
+                   fill=(255, 196, 0, int(255 * (1 - u))), width=6)
+    if ph < hit:
+        u = ph / hit
+        _ball(d, 120 + 420 * u, base - 60 - 180 * (1 - u) * u * 4 * 0.25, 20)
+    f = fonts["small"]
+    t = args.get("label", "0  &  0")
+    d.text((820 - d.textlength(t, font=f) / 2, BY0 + 30), t, font=f, fill=(255, 90, 90))
+
+
+def batcount(L, lt, dur, fonts, args):
+    """Bat with runs counter ticking up (e.g. 78 off 79)."""
+    d = ImageDraw.Draw(L, "RGBA")
+    ang = -0.5 + 0.25 * math.sin(lt * 4)
+    _bat(d, 330, BY0 + 10, ang, 1.05)
+    f = fonts["mid"]; fs = fonts["small"]
+    runs = int(args.get("runs", 78)); balls = int(args.get("balls", 79))
+    p = _ease(lt / 1.4)
+    t = str(int(runs * p))
+    d.text((720 - d.textlength(t, font=f) / 2, BY0 + 10), t, font=f, fill=(255, 196, 0))
+    s = f"({int(balls * p)} गेंद)"
+    d.text((720 - d.textlength(s, font=fs) / 2, BY0 + 170), s, font=fs, fill=(255, 255, 255))
+
+
+def trophy(L, lt, dur, fonts, args):
+    """Trophy rising with a 1 vs ? series board and calendar for the next Test."""
+    d = ImageDraw.Draw(L, "RGBA")
+    k = _back(lt / 0.6)
+    cx, base = 380, BY1 - 10
+    s = k
+    d.rectangle([cx - 70 * s, base - 30 * s, cx + 70 * s, base], fill=(140, 95, 55))
+    d.rectangle([cx - 18 * s, base - 90 * s, cx + 18 * s, base - 30 * s], fill=(255, 196, 0))
+    d.pieslice([cx - 95 * s, base - 260 * s, cx + 95 * s, base - 70 * s], 0, 180, fill=(255, 196, 0))
+    d.rectangle([cx - 95 * s, base - 170 * s, cx + 95 * s, base - 165 * s], fill=(255, 196, 0))
+    for sgn in (-1, 1):
+        d.arc([cx + sgn * 95 * s - 40 * s, base - 230 * s, cx + sgn * 95 * s + 40 * s, base - 150 * s],
+              90 if sgn > 0 else 270, 270 if sgn > 0 else 90, fill=(255, 196, 0), width=int(10 * s) + 1)
+    for j in range(6):
+        ph = (lt * 0.8 + j / 6) % 1
+        a = j * 1.1
+        r = 130 + 60 * ph
+        d.ellipse([cx + r * math.cos(a) - 5, base - 170 + r * math.sin(a) * 0.6 - 5, cx + r * math.cos(a) + 5, base - 170 + r * math.sin(a) * 0.6 + 5],
+                  fill=(255, 240, 150, int(255 * (1 - ph))))
+    if lt > 0.4:
+        dy = -200 * (1 - _back((lt - 0.4) / 0.5))
+        x0, y0 = 640, BY0 + 20 + dy
+        d.rounded_rectangle([x0, y0, x0 + 220, y0 + 240], 18, fill=(250, 248, 240))
+        d.rounded_rectangle([x0, y0, x0 + 220, y0 + 70], 18, fill=(230, 50, 70))
+        d.rectangle([x0, y0 + 50, x0 + 220, y0 + 70], fill=(230, 50, 70))
+        fm, fd = fonts["small"], fonts["mid"]
+        m = args.get("month", "NOV"); day = args.get("day", "27")
+        d.text((x0 + 110 - d.textlength(m, font=fm) / 2, y0 + 4), m, font=fm, fill=(255, 255, 255))
+        d.text((x0 + 110 - d.textlength(day, font=fd) / 2, y0 + 60), day, font=fd, fill=(30, 30, 50))
+
+
+def poll(L, lt, dur, fonts, args):
+    """Two buttons (HAAN / NA) with bars filling and a tapping finger on HAAN."""
+    d = ImageDraw.Draw(L, "RGBA")
+    f = fonts["small"]
+    for i, (lab, col, pct) in enumerate(((args.get("a", "हाँ"), (60, 190, 110), 0.7), (args.get("b", "ना"), (220, 70, 70), 0.3))):
+        y = BY0 + 30 + i * 125
+        d.rounded_rectangle([200, y, 880, y + 95], 47, fill=(255, 255, 255, 40))
+        w = 680 * pct * _ease((lt - 0.2 * i) / 1.2)
+        if w > 95:
+            d.rounded_rectangle([200, y, 200 + w, y + 95], 47, fill=col + (230,))
+        d.text((240, y + 14), lab, font=f, fill=(255, 255, 255))
+    tp = (lt % 1.2) / 1.2
+    fx, fy = 760, BY0 + 105 + (10 if tp < 0.2 else 0)
+    d.ellipse([fx - 26, fy - 26, fx + 26, fy + 26], fill=(255, 220, 180))
+    d.rounded_rectangle([fx - 22, fy, fx + 22, fy + 90], 18, fill=(255, 220, 180))
+    if tp < 0.3:
+        r = 40 + 80 * tp / 0.3
+        d.ellipse([fx - r, fy - 26 - r * 0.2, fx + r, fy - 26 + r * 0.2 * 2], outline=(255, 255, 255, int(200 * (1 - tp / 0.3))), width=4)
+
+
+ANIMS.update({"scoreboard": scoreboard, "six": six, "stumps": stumps, "batcount": batcount, "trophy": trophy, "poll": poll})
