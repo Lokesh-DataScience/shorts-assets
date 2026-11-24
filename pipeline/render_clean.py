@@ -81,6 +81,15 @@ def fit_font(fn, txt, size, maxw):
     return fn(size)
 
 
+def word_layer(txt, font, fill):
+    """Fixed-height layer (ascent+descent) so every word shares one baseline."""
+    asc, desc = font.getmetrics()
+    bb = font.getbbox(txt)
+    L = Image.new("RGBA", (bb[2] - bb[0] + 20, asc + desc + 20), (0, 0, 0, 0))
+    ImageDraw.Draw(L).text((10 - bb[0], 10), txt, font=font, fill=fill)
+    return L
+
+
 def paste(base, L, cx, top, alpha=1.0, scale=1.0, dx=0, dy=0):
     if scale != 1.0:
         L = L.resize((max(1, int(L.width * scale)), max(1, int(L.height * scale))), Image.LANCZOS)
@@ -92,7 +101,7 @@ def paste(base, L, cx, top, alpha=1.0, scale=1.0, dx=0, dy=0):
 def words_in(base, txt, font, fill, cx, top, lt, delay=0.0, stagger=0.07):
     """Word-by-word slide-up with spring; returns height used."""
     words = txt.split()
-    layers = [text_layer(w, font, fill) for w in words]
+    layers = [word_layer(w, font, fill) for w in words]
     sp = font.getlength(" ")
     total = sum(l.width - 20 for l in layers) + sp * (len(words) - 1)
     x = cx - total / 2
@@ -265,7 +274,94 @@ def ic_number(d, box, lt, a):
     d.text(((x0 + x1) / 2 - f.getlength(t) / 2, y0 + 40 + 40 * (1 - k)), t, font=f, fill=GREEN)
 
 
-ICONS = {"closed": ic_closed, "aqi": ic_aqi, "train": ic_train, "bullet": ic_bullet, "tanker": ic_tanker, "number": ic_number}
+
+def _bottle(d, cx, base, s, fill, outline=INK, w=5):
+    d.rounded_rectangle([cx - 14 * s, base - 150 * s, cx + 14 * s, base - 128 * s], int(4 * s), fill=outline)
+    d.rounded_rectangle([cx - 36 * s, base - 130 * s, cx + 36 * s, base], int(18 * s), fill=fill, outline=outline, width=w)
+    d.rectangle([cx - 36 * s + w, base - 85 * s, cx + 36 * s - w, base - 55 * s], fill=(255, 255, 255))
+
+
+def ic_bottles(d, box, lt, a):
+    """Row of bottles, one (the failing batch) highlighted with a green bracket + tag."""
+    x0, y0, x1, y1 = box
+    n = int(a.get("n", 6)); hi = int(a.get("hi", 3))
+    base = y1 - 70
+    for i in range(n):
+        cx = x0 + 70 + i * (x1 - x0 - 140) / (n - 1)
+        k = spring((lt - 0.06 * i) / 0.45)
+        if k <= 0.02: continue
+        sel = i == hi and lt > 0.9
+        _bottle(d, cx, base + 40 * (1 - k), 1.05, (255, 230, 230) if sel else (220, 240, 255), outline=(230, 60, 60) if sel else INK)
+    if lt > 0.9:
+        cx = x0 + 70 + hi * (x1 - x0 - 140) / (n - 1)
+        k = spring((lt - 0.9) / 0.4); m = 30; ax, ay = 62 * (2 - k), 100 * (2 - k)
+        cy = base - 75
+        for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+            x, y = cx + sx * ax, cy + sy * ay
+            d.line([(x, y - sy * m), (x, y), (x - sx * m, y)], fill=GREEN, width=7)
+    tag = a.get("tag", "")
+    if tag and lt > 1.2:
+        fs = F_BODY(42); w = fs.getlength(tag) + 44
+        d.rounded_rectangle([(x0 + x1) / 2 - w / 2, y0 + 6, (x0 + x1) / 2 + w / 2, y0 + 72], 33, fill=INK)
+        d.text(((x0 + x1) / 2 - fs.getlength(tag) / 2, y0 + 10), tag, font=fs, fill=(255, 255, 255))
+
+
+def ic_meter(d, box, lt, a):
+    """Gauge with a limit mark; needle sweeps to the value (turns red past the limit)."""
+    x0, y0, x1, y1 = box
+    val, lim, vmax = float(a.get("value", 12)), float(a.get("limit", 10)), float(a.get("max", 16))
+    gx, gy, r = (x0 + x1) / 2, y1 - 40, 230
+    d.arc([gx - r, gy - r, gx + r, gy + r], 180, 360, fill=LINE, width=36)
+    d.arc([gx - r, gy - r, gx + r, gy + r], 180, 180 + 180 * lim / vmax, fill=GREEN_L, width=36)
+    d.arc([gx - r, gy - r, gx + r, gy + r], 180 + 180 * lim / vmax, 360, fill=(255, 205, 205), width=36)
+    la = math.pi + math.pi * lim / vmax
+    d.line([(gx + (r - 40) * math.cos(la), gy + (r - 40) * math.sin(la)), (gx + (r + 34) * math.cos(la), gy + (r + 34) * math.sin(la))], fill=INK, width=6)
+    fs = F_BODY(36); lt_ = a.get("limit_label", f"लिमिट {int(lim)}")
+    d.text((gx + (r + 40) * math.cos(la) - fs.getlength(lt_) / 2 + 30, gy + (r + 40) * math.sin(la) - 50), lt_, font=fs, fill=INK)
+    p = eo(lt / 1.3); v = val * p
+    ang = math.pi + math.pi * v / vmax
+    col = (230, 50, 50) if v > lim else INK
+    d.line([(gx, gy), (gx + (r - 55) * math.cos(ang), gy + (r - 55) * math.sin(ang))], fill=col, width=9)
+    d.ellipse([gx - 18, gy - 18, gx + 18, gy + 18], fill=col)
+    f = F_HEAD(96); t = f"{v:.0f}"
+    d.text((x0 + 30, y0 - 4), t, font=f, fill=col)
+    u = a.get("unit", ""); fu = F_BODY(34)
+    if u: d.text((x0 + 40 + f.getlength(t), y0 + 50), u, font=fu, fill=GRAY)
+
+
+def ic_shield(d, box, lt, a):
+    """Shield pops in, tick draws, optional pill label."""
+    x0, y0, x1, y1 = box; cx, cy = (x0 + x1) / 2, (y0 + y1) / 2 - 10
+    k = spring(lt / 0.55); s = 150 * k
+    if s > 4:
+        d.polygon([(cx, cy - s), (cx + s * 0.85, cy - s * 0.6), (cx + s * 0.75, cy + s * 0.35), (cx, cy + s), (cx - s * 0.75, cy + s * 0.35), (cx - s * 0.85, cy - s * 0.6)], fill=GREEN)
+    q = eo((lt - 0.4) / 0.5)
+    if q > 0:
+        pts = [(cx - 60, cy), (cx - 15, cy + 45), (cx + 70, cy - 50)]
+        seg = [(pts[0], pts[1], 0.4), (pts[1], pts[2], 0.6)]; acc = 0; drawn = [pts[0]]
+        for (pa, pb, frac) in seg:
+            u = clamp((q - acc) / frac); acc += frac
+            if u > 0: drawn.append((pa[0] + (pb[0] - pa[0]) * u, pa[1] + (pb[1] - pa[1]) * u))
+        d.line(drawn, fill=(255, 255, 255), width=18, joint="curve")
+    for k2 in range(8):                                   # sparkle ring
+        ph = (lt * 0.7 + k2 / 8) % 1; ang = k2 * math.pi / 4; rr = 190 + 30 * ph
+        x, y = cx + rr * math.cos(ang), cy + rr * math.sin(ang) * 0.8
+        d.ellipse([x - 7, y - 7, x + 7, y + 7], fill=GREEN_L + (int(255 * (1 - ph)),))
+
+
+def ic_bottleq(d, box, lt, a):
+    """Hook art: big bottle with a pulsing red question mark (visible at frame 0)."""
+    x0, y0, x1, y1 = box; cx = (x0 + x1) / 2 - 80
+    _bottle(d, cx, y1 - 20, 2.6, (220, 240, 255))
+    for k in range(5):
+        ph = (lt * 0.8 + k / 5) % 1
+        bx = cx - 40 + k * 20; by = y1 - 60 - 220 * ph
+        d.ellipse([bx - 9, by - 9, bx + 9, by + 9], outline=(120, 180, 240, int(255 * (1 - ph))), width=3)
+    pulse = 1 + 0.1 * math.sin(lt * 7)
+    f = F_HEAD(int(300 * pulse)); q = "?"
+    d.text((cx + 200 - f.getlength(q) / 2, y0 + 10 - 30 * (pulse - 1) * 10), q, font=f, fill=(230, 50, 50))
+
+ICONS = {"bottles": ic_bottles, "meter": ic_meter, "shield": ic_shield, "bottleq": ic_bottleq, "closed": ic_closed, "aqi": ic_aqi, "train": ic_train, "bullet": ic_bullet, "tanker": ic_tanker, "number": ic_number}
 
 
 # ---------------------------------------------------------------- captions
@@ -305,6 +401,10 @@ def header(base, d, idx, t):
 
 def scene_hook(base, sc, lt, t):
     d = ImageDraw.Draw(base)
+    if sc.get("icon") in ICONS:
+        d._im = base
+        ICONS[sc["icon"]](d, (200, 300, 880, 920), lt, sc.get("icon_args", {}))
+        return _hook_text(base, sc, lt)
     cx, cy, r = 540, 640, 300
     d.arc([cx - r, cy - r, cx + r, cy + r], 200, 340, fill=GREEN, width=8)
     d.arc([cx - r, cy - r, cx + r, cy + r], 340, 560, fill=LINE, width=4)
@@ -322,6 +422,10 @@ def scene_hook(base, sc, lt, t):
     nx, ny = -math.sin(ang) * 14, math.cos(ang) * 14
     d.polygon([tail, (cx + nx, cy + ny), tip, (cx - nx, cy - ny)], fill=INK)
     d.ellipse([cx - 22, cy - 22, cx + 22, cy + 22], fill=GREEN)
+    _hook_text(base, sc, lt)
+
+
+def _hook_text(base, sc, lt):
     # text: fully visible at frame 0 (punch-in only)
     punch = 1.0 + 0.08 * (1 - eo(lt / 0.35))
     big = sc["big"]
@@ -402,12 +506,24 @@ def scene_story(base, sc, lt, t, dur):
 
 def scene_cta(base, sc, lt, t):
     d = ImageDraw.Draw(base)
-    big = sc["big"]; f = fit_font(F_HEAD, big, 130, 900)
+    big = sc["big"]; f = fit_font(F_HEAD, big, 120, 760)
     words_in(base, big, f, INK, 540, 420, lt)
     w = f.getlength(big); q = eo((lt - 0.5) / 0.7)
     if q > 0:
         d.arc([540 - w / 2 - 95, 385, 540 + w / 2 + 95, 640], 200, 200 + 330 * q, fill=GREEN, width=8)
-    # five number circles + snapping bracket
+    if not sc.get("choices", 0):
+        k = spring((lt - 0.2) / 0.5); cx, cy = 540, 860
+        if k > 0.02:
+            w2, h2 = 300 * k, 190 * k
+            d.rounded_rectangle([cx - w2, cy - h2, cx + w2, cy + h2], int(60 * k), fill=GREEN)
+            d.polygon([(cx - 120 * k, cy + h2 - 4), (cx - 190 * k, cy + h2 + 90 * k), (cx - 40 * k, cy + h2 - 4)], fill=GREEN)
+            for i in range(3):
+                b = 1 + 0.35 * max(0, math.sin(lt * 6 - i * 0.9))
+                r = 26 * k * b
+                d.ellipse([cx - 110 + i * 110 - r, cy - r, cx - 110 + i * 110 + r, cy + r], fill=(255, 255, 255))
+        _cta_tail(base, d, sc, lt)
+        return
+    # number circles + snapping bracket
     xs = [140 + i * 200 for i in range(5)]; cy = 860
     for i, x in enumerate(xs):
         k = spring((lt - 0.2 - 0.1 * i) / 0.45)
@@ -421,14 +537,18 @@ def scene_cta(base, sc, lt, t):
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
         x, y = bx + sx * a, cy + sy * a
         d.line([(x, y - sy * m), (x, y), (x - sx * m, y)], fill=GREEN, width=7)
+    _cta_tail(base, d, sc, lt)
+
+
+def _cta_tail(base, d, sc, lt):
     if sc.get("sub"):
         fs = fit_font(F_SERIF, sc["sub"], 80, 960)
-        paste(base, text_layer(sc["sub"], fs, GREEN), 540, 1040, alpha=clamp((lt - 0.5) / 0.4))
+        paste(base, text_layer(sc["sub"], fs, GREEN), 540, 1130, alpha=clamp((lt - 0.5) / 0.4))
     fb = F_BODY(46); t2 = "फॉलो करो • " + data.get("pill", "ख़बर का हिसाब")
     if lt > 1.0:
         w = fb.getlength(t2) + 60
-        d.rounded_rectangle([540 - w / 2, 1220, 540 + w / 2, 1300], 40, fill=INK)
-        d.text((540 - fb.getlength(t2) / 2, 1226), t2, font=fb, fill=(255, 255, 255))
+        d.rounded_rectangle([540 - w / 2, 1290, 540 + w / 2, 1370], 40, fill=INK)
+        d.text((540 - fb.getlength(t2) / 2, 1296), t2, font=fb, fill=(255, 255, 255))
 
 
 # ---------------------------------------------------------------- frame
