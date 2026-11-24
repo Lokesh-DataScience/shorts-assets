@@ -361,7 +361,114 @@ def ic_bottleq(d, box, lt, a):
     f = F_HEAD(int(300 * pulse)); q = "?"
     d.text((cx + 200 - f.getlength(q) / 2, y0 + 10 - 30 * (pulse - 1) * 10), q, font=f, fill=(230, 50, 50))
 
-ICONS = {"bottles": ic_bottles, "meter": ic_meter, "shield": ic_shield, "bottleq": ic_bottleq, "closed": ic_closed, "aqi": ic_aqi, "train": ic_train, "bullet": ic_bullet, "tanker": ic_tanker, "number": ic_number}
+
+def _diya(d, cx, cy, s, lt, k=0):
+    d.chord([cx - 70 * s, cy - 40 * s, cx + 70 * s, cy + 40 * s], 0, 180, fill=GREEN)
+    d.ellipse([cx - 70 * s, cy - 10 * s, cx + 70 * s, cy + 10 * s], fill=GREEN_D)
+    fl = 1 + 0.12 * math.sin(lt * 13 + k * 1.7)
+    d.polygon([(cx - 15 * s, cy - 6 * s), (cx, cy - 6 * s - 70 * s * fl), (cx + 15 * s, cy - 6 * s)], fill=(255, 170, 0))
+    d.polygon([(cx - 7 * s, cy - 8 * s), (cx, cy - 8 * s - 36 * s * fl), (cx + 7 * s, cy - 8 * s)], fill=(255, 238, 140))
+
+
+def ic_diyas(d, box, lt, a):
+    """Hook art: soft glow + row of flickering diyas (visible at frame 0)."""
+    x0, y0, x1, y1 = box; cy = y1 - 160
+    g = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(g).ellipse([x0 - 40, cy - 260, x1 + 40, cy + 120], fill=(255, 210, 120, int(110 + 30 * math.sin(lt * 3))))
+    d._im.alpha_composite(g.filter(ImageFilter.GaussianBlur(60)))
+    for i, (dx, sc_) in enumerate(((-260, 0.9), (0, 1.35), (260, 0.9))):
+        _diya(d, (x0 + x1) / 2 + dx, cy + (0 if i == 1 else 40), sc_, lt, i)
+    for k in range(10):
+        ph = (lt * 0.5 + k / 10) % 1; x = x0 + 40 + (k * 67) % (x1 - x0 - 80); y = cy - 80 - 300 * ph
+        d.ellipse([x - 5, y - 5, x + 5, y + 5], fill=(255, 190, 60, int(255 * (1 - ph))))
+
+
+def ic_pin(d, box, lt, a):
+    """Map pin drops on a place, label + year pill."""
+    x0, y0, x1, y1 = box; cx = (x0 + x1) / 2
+    base = y1 - 70
+    d.ellipse([cx - 200, base - 26, cx + 200, base + 26], fill=LINE)
+    for k in range(2):
+        ph = (lt * 0.8 + k / 2) % 1; rr = 40 + 150 * ph
+        d.ellipse([cx - rr, base - rr * 0.18, cx + rr, base + rr * 0.18], outline=GREEN + (int(255 * (1 - ph)),), width=4)
+    p = spring(lt / 0.6); py = base - 260 * (1 - p)
+    d.ellipse([cx - 70, py - 210, cx + 70, py - 70], fill=GREEN)
+    d.polygon([(cx - 62, py - 115), (cx, py), (cx + 62, py - 115)], fill=GREEN)
+    d.ellipse([cx - 28, py - 168, cx + 28, py - 112], fill=(255, 255, 255))
+    lab = a.get("label", ""); fs = F_BODY(46)
+    if lab and lt > 0.6:
+        w = fs.getlength(lab) + 44
+        d.rounded_rectangle([cx + 110, y0 + 30, cx + 110 + w, y0 + 100], 35, fill=INK)
+        d.text((cx + 132, y0 + 34), lab, font=fs, fill=(255, 255, 255))
+    yr = a.get("year", "")
+    if yr:
+        fy = F_HEAD(90); d.text((x0 + 20, y0 + 10), yr, font=fy, fill=GREEN)
+
+
+def ic_circles(d, box, lt, a):
+    """N circles in two rows; the first one lights up green with a bracket."""
+    x0, y0, x1, y1 = box; n = int(a.get("n", 10)); cols = (n + 1) // 2
+    hi = int(a.get("hi", 0))
+    for i in range(n):
+        r_, c_ = divmod(i, cols)
+        cx = x0 + 80 + c_ * (x1 - x0 - 160) / (cols - 1); cy = y0 + 110 + r_ * 160
+        k = spring((lt - 0.05 * i) / 0.4)
+        if k <= 0.02: continue
+        on = i == hi and lt > 0.8
+        rr = 52 * k
+        d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=GREEN if on else (255, 255, 255), outline=GREEN if on else INK, width=4)
+        f = F_HEAD(int(56 * k)); t = str(i + 1)
+        d.text((cx - f.getlength(t) / 2, cy - 44 * k), t, font=f, fill=(255, 255, 255) if on else INK)
+        if on:
+            q = spring((lt - 0.8) / 0.4); m = 22; ax = 78 * (2 - q)
+            for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+                x, y = cx + sx * ax, cy + sy * ax
+                d.line([(x, y - sy * m), (x, y), (x - sx * m, y)], fill=GREEN, width=6)
+
+
+def ic_word(d, box, lt, a):
+    """Big serif green word with a soft glow pulse."""
+    x0, y0, x1, y1 = box; t = a.get("text", "")
+    f = fit_font(F_SERIF, t, 170, x1 - x0 - 60)
+    k = spring(lt / 0.6)
+    g = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gcx, gcy = (x0 + x1) / 2, (y0 + y1) / 2
+    rr = 230 * (1 + 0.05 * math.sin(lt * 3))
+    ImageDraw.Draw(g).ellipse([gcx - rr, gcy - rr * 0.55, gcx + rr, gcy + rr * 0.55], fill=GREEN_L + (110,))
+    d._im.alpha_composite(g.filter(ImageFilter.GaussianBlur(40)))
+    L = text_layer(t, f, GREEN)
+    L = L.resize((max(1, int(L.width * (0.7 + 0.3 * k))), max(1, int(L.height * (0.7 + 0.3 * k)))), Image.LANCZOS)
+    d._im.alpha_composite(_alpha(L, clamp(k * 1.3)), (int(gcx - L.width / 2), int(gcy - L.height / 2)))
+
+
+def ic_plates(d, box, lt, a):
+    """Row of plates filling in one by one, people dots seated behind (langar)."""
+    x0, y0, x1, y1 = box; n = 6; cy = y1 - 120
+    d.rounded_rectangle([x0 + 20, cy + 40, x1 - 20, cy + 70], 14, fill=(235, 225, 205))
+    for i in range(n):
+        cx = x0 + 70 + i * (x1 - x0 - 140) / (n - 1)
+        k = spring((lt - 0.12 * i) / 0.45)
+        if k <= 0.02: continue
+        d.ellipse([cx - 22 * k, cy - 160 * k, cx + 22 * k, cy - 116 * k], fill=INK)
+        d.rounded_rectangle([cx - 30 * k, cy - 112 * k, cx + 30 * k, cy - 40 * k], int(14 * k), fill=INK)
+        d.ellipse([cx - 52 * k, cy - 20 * k, cx + 52 * k, cy + 30 * k], fill=(255, 255, 255), outline=INK, width=4)
+        if lt > 0.6 + 0.12 * i:
+            q = spring((lt - 0.6 - 0.12 * i) / 0.4)
+            d.ellipse([cx - 30 * q, cy - 8 * q, cx + 6 * q, cy + 18 * q], fill=(255, 190, 60))
+            d.ellipse([cx + 2 * q, cy - 6 * q, cx + 32 * q, cy + 16 * q], fill=GREEN)
+
+
+def ic_counter(d, box, lt, a):
+    """Big number counting up with a green progress ring."""
+    x0, y0, x1, y1 = box; cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    val = int(a.get("value", 557)); p = eo(lt / 1.4)
+    r = 160
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=LINE, width=18)
+    d.arc([cx - r, cy - r, cx + r, cy + r], -90, -90 + 360 * p, fill=GREEN, width=18)
+    t = str(int(val * p)) + a.get("suffix", ""); f = fit_font(F_HEAD, t, 130, 2 * r - 40)
+    d.text((cx - f.getlength(t) / 2, cy - 100), t, font=f, fill=INK)
+
+ICONS = {"diyas": ic_diyas, "pin": ic_pin, "circles": ic_circles, "word": ic_word, "plates": ic_plates, "counter": ic_counter, "bottles": ic_bottles, "meter": ic_meter, "shield": ic_shield, "bottleq": ic_bottleq, "closed": ic_closed, "aqi": ic_aqi, "train": ic_train, "bullet": ic_bullet, "tanker": ic_tanker, "number": ic_number}
 
 
 # ---------------------------------------------------------------- captions
@@ -429,9 +536,12 @@ def _hook_text(base, sc, lt):
     # text: fully visible at frame 0 (punch-in only)
     punch = 1.0 + 0.08 * (1 - eo(lt / 0.35))
     big = sc["big"]
-    parts = big.split(" ", 2)
-    l1 = " ".join(parts[:2]) if len(parts) > 2 else big
-    l2 = parts[2] if len(parts) > 2 else ""
+    if sc.get("big2"):
+        l1, l2 = big, sc["big2"]
+    else:
+        parts = big.split(" ", 2)
+        l1 = " ".join(parts[:2]) if len(parts) > 2 else big
+        l2 = parts[2] if len(parts) > 2 else ""
     f1 = fit_font(F_HEAD, l1, 120, 900)
     paste(base, text_layer(l1, f1, INK), 540, 975, scale=punch)
     if l2:
