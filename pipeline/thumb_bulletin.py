@@ -28,8 +28,7 @@ def grad(w, h, c1, c2):
     return g
 
 
-def icon(d, name, cx, cy, s):
-    w = WHITE
+def icon(d, name, cx, cy, s, w=WHITE):
     if name in ("down", "up"):
         sgn = 1 if name == "down" else -1
         pts = [(cx - 0.9 * s, cy - 0.5 * s * sgn), (cx - 0.3 * s, cy + 0.1 * sgn * s), (cx + 0.1 * s, cy - 0.2 * sgn * s), (cx + 0.7 * s, cy + 0.5 * sgn * s)]
@@ -86,6 +85,8 @@ def fit(d, text, font_fn, size, maxw):
 
 def main(src, out):
     cfg = json.load(open(src))
+    if cfg.get("theme") == "clean":
+        return main_clean(cfg, out)
     im = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(im)
     for y in range(H):
@@ -145,6 +146,54 @@ def main(src, out):
     d.text((540 - d.textlength(ft, font=f) / 2, H - 93), ft, font=f, fill=INK)
     im.convert("RGB").save(out)
     print("wrote", out)
+
+
+def main_clean(cfg, out):
+    GREEN, INKc, GRAYc, LINEc = (0, 200, 83), (17, 17, 17), (110, 110, 110), (229, 229, 229)
+    im = Image.new("RGBA", (W, H), (250, 250, 250, 255)); d = ImageDraw.Draw(im)
+    for y in range(60, H, 48):
+        for x in range(30, W, 48):
+            d.ellipse([x - 1.6, y - 1.6, x + 1.6, y + 1.6], fill=(230, 230, 230))
+    g = Image.new("RGBA", (W, H), (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
+    gd.ellipse([-300, 80, 500, 800], fill=(128, 232, 157, 110)); gd.ellipse([620, 1250, 1400, 2050], fill=(128, 232, 157, 90))
+    im.alpha_composite(g.filter(ImageFilter.GaussianBlur(120))); d = ImageDraw.Draw(im)
+    m, a = 40, 90
+    for (x, y, sx, sy) in ((m, m, 1, 1), (W - m, m, -1, 1), (m, H - m, 1, -1), (W - m, H - m, -1, -1)):
+        d.line([(x, y + sy * a), (x, y), (x + sx * a, y)], fill=GREEN, width=9)
+    SER = lambda s_: ImageFont.truetype(os.path.join(HERE, "fonts", "TiroHindi-italic.ttf"), s_)
+    date = cfg.get("date", "")
+    if date:
+        f = FS(50); w = d.textlength(date, font=f) + 70
+        d.rounded_rectangle([540 - w / 2, 80, 540 + w / 2, 156], 38, fill=INKc)
+        d.text((540 - d.textlength(date, font=f) / 2, 84), date, font=f, fill=WHITE)
+    t1, t2 = cfg.get("title1", "आज की"), cfg.get("title2", "5 बड़ी ख़बरें")
+    f1 = fit(d, t1, FM, 150, 980); f2 = fit(d, t2, SER, 175, 1000)
+    d.text((540 - d.textlength(t1, font=f1) / 2, 160), t1, font=f1, fill=INKc)
+    d.text((540 - d.textlength(t2, font=f2) / 2, 385), t2, font=f2, fill=GREEN)
+    w2 = d.textlength(t2, font=f2)
+    d.line([(540 - w2 / 2 + 10 + k * (w2 - 20) / 30, 598 + 7 * math.sin(k * 0.9)) for k in range(31)], fill=GREEN, width=8)
+    top, gap, ch = 640, 18, 218
+    for i, it in enumerate(cfg["items"][:5]):
+        y = top + i * (ch + gap); x0, x1 = 50, W - 50
+        sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        ImageDraw.Draw(sh).rounded_rectangle([x0, y + 14, x1, y + ch + 14], 34, fill=(0, 0, 0, 40))
+        im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(14))); d = ImageDraw.Draw(im)
+        d.rounded_rectangle([x0, y, x1, y + ch], 34, fill=WHITE, outline=LINEc, width=2)
+        bx, by = x0 + 95, y + ch / 2
+        pts = [(bx + 70 * math.cos(math.pi / 6 + k * math.pi / 3), by + 70 * math.sin(math.pi / 6 + k * math.pi / 3)) for k in range(6)]
+        d.polygon(pts, fill=GREEN)
+        fn = FM(92); n = str(i + 1); d.text((bx - d.textlength(n, font=fn) / 2, by - 72), n, font=fn, fill=WHITE)
+        icon(d, it.get("icon", ""), x1 - 105, by, 62, w=GREEN)
+        maxw = (x1 - 190) - (bx + 95)
+        ft = fit(d, it["text"], FM, 90, maxw)
+        d.text((bx + 95, y + 22), it["text"], font=ft, fill=INKc)
+        if it.get("sub"):
+            fs_ = fit(d, it["sub"], FS, 50, maxw)
+            d.text((bx + 97, y + 134), it["sub"], font=fs_, fill=GRAYc)
+    ft = cfg.get("footer", "ख़बर का हिसाब"); f = FS(46); w = d.textlength(ft, font=f) + 60
+    d.rounded_rectangle([540 - w / 2, H - 100, 540 + w / 2, H - 34], 33, fill=GREEN)
+    d.text((540 - d.textlength(ft, font=f) / 2, H - 98), ft, font=f, fill=WHITE)
+    im.convert("RGB").save(out); print("wrote", out)
 
 
 if __name__ == "__main__":
