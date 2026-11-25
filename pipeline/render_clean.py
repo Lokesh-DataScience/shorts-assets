@@ -465,10 +465,92 @@ def ic_counter(d, box, lt, a):
     r = 160
     d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=LINE, width=18)
     d.arc([cx - r, cy - r, cx + r, cy + r], -90, -90 + 360 * p, fill=GREEN, width=18)
-    t = str(int(val * p)) + a.get("suffix", ""); f = fit_font(F_HEAD, t, 130, 2 * r - 40)
+    t = str(int(round(val * p))) + a.get("suffix", ""); f = fit_font(F_HEAD, t, 130, 2 * r - 90)
     d.text((cx - f.getlength(t) / 2, cy - 100), t, font=f, fill=INK)
 
-ICONS = {"diyas": ic_diyas, "pin": ic_pin, "circles": ic_circles, "word": ic_word, "plates": ic_plates, "counter": ic_counter, "bottles": ic_bottles, "meter": ic_meter, "shield": ic_shield, "bottleq": ic_bottleq, "closed": ic_closed, "aqi": ic_aqi, "train": ic_train, "bullet": ic_bullet, "tanker": ic_tanker, "number": ic_number}
+SILVER, SILVER_D = (214, 218, 224), (150, 156, 166)
+def ic_coin(d, box, lt, a):
+    """Silver coin spinning in (squash on x), value on face, optional price tag sliding in."""
+    x0, y0, x1, y1 = box; cx, cy = (x0 + x1) / 2 - (60 if a.get("price") else 0), (y0 + y1) / 2 + 10
+    r = 165; k = spring(lt / 0.7)
+    sq = abs(math.cos(max(0.0, 1.2 - lt) * 4.5)) if lt < 1.2 else 1.0
+    sq = max(0.08, sq) * (0.75 + 0.25 * k)
+    rx = r * sq
+    g = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(g).ellipse([cx - r - 30, cy - r - 30, cx + r + 30, cy + r + 30], fill=(255, 255, 255, int(150 + 60 * math.sin(lt * 3))))
+    d._im.alpha_composite(g.filter(ImageFilter.GaussianBlur(30)))
+    d.ellipse([cx - rx + 10, cy - r + 14, cx + rx + 10, cy + r + 14], fill=SILVER_D)
+    d.ellipse([cx - rx, cy - r, cx + rx, cy + r], fill=SILVER, outline=SILVER_D, width=8)
+    ph = (lt * 0.7) % 1
+    if sq > 0.55 and ph < 0.4:
+        sx = cx - rx + 2 * rx * ph / 0.4
+        d.line([(sx - 30, cy - r * 0.7), (sx + 30, cy + r * 0.7)], fill=(255, 255, 255), width=14)
+    if sq > 0.55:
+        d.ellipse([cx - rx * 0.82, cy - r * 0.82, cx + rx * 0.82, cy + r * 0.82], outline=(255, 255, 255), width=5)
+        t = a.get("text", "₹75"); f = fit_font(F_HEAD, t, 120, rx * 1.5)
+        d.text((cx - f.getlength(t) / 2, cy - 95), t, font=f, fill=INK)
+    pr = a.get("price")
+    if pr and lt > 0.9:
+        q = spring((lt - 0.9) / 0.45); fs = F_HEAD(64); w = fs.getlength(pr) + 60
+        tx = x1 - w - 10 + 300 * (1 - q); ty = y0 + 40
+        d.rounded_rectangle([tx, ty, tx + w, ty + 100], 22, fill=GREEN)
+        d.ellipse([tx + 14, ty + 40, tx + 34, ty + 60], fill=(255, 255, 255))
+        d.text((tx + 42, ty + 6), pr, font=fs, fill=(255, 255, 255))
+
+
+def ic_jail(d, box, lt, a):
+    """Old building behind jail bars; bars slide apart to reveal it, label pill."""
+    x0, y0, x1, y1 = box; cx = (x0 + x1) / 2; base = y1 - 60
+    # building
+    bw, bh = 520, 230
+    d.rectangle([cx - bw / 2, base - bh, cx + bw / 2, base], fill=(255, 255, 255), outline=INK, width=6)
+    d.polygon([(cx - bw / 2 - 30, base - bh), (cx, base - bh - 110), (cx + bw / 2 + 30, base - bh)], fill=GREEN)
+    for i in range(5):
+        wx = cx - bw / 2 + 40 + i * (bw - 80) / 4
+        d.rectangle([wx - 26, base - bh + 50, wx + 26, base - bh + 130], fill=GREEN_L, outline=INK, width=4)
+    d.rectangle([cx - 40, base - 90, cx + 40, base], fill=INK)
+    d.line([(x0 + 20, base), (x1 - 20, base)], fill=INK, width=6)
+    # bars
+    op = eo((lt - 0.5) / 0.7)
+    n = 9
+    for i in range(n):
+        bx = x0 + 40 + i * (x1 - x0 - 80) / (n - 1)
+        side = -1 if bx < cx else 1
+        bx += side * op * 420
+        if x0 + 10 < bx < x1 - 10:
+            d.rounded_rectangle([bx - 9, y0 + 20, bx + 9, y1 - 20], 9, fill=(90, 90, 90))
+    if op < 0.99:
+        for yy in (y0 + 60, y1 - 60):
+            d.rectangle([x0 + 20 - op * 420, yy - 8, cx - op * 420, yy + 8], fill=(90, 90, 90))
+            d.rectangle([cx + op * 420, yy - 8, x1 - 20 + op * 420, yy + 8], fill=(90, 90, 90))
+    lab = a.get("label", "")
+    if lab and lt > 1.1:
+        fs = F_BODY(44); w = fs.getlength(lab) + 44
+        d.rounded_rectangle([x0 + 20, y0 + 20, x0 + 20 + w, y0 + 88], 34, fill=INK)
+        d.text((x0 + 42, y0 + 22), lab, font=fs, fill=(255, 255, 255))
+
+
+def ic_growbars(d, box, lt, a):
+    """Bars grow; the highlighted one (label) is tallest and green."""
+    x0, y0, x1, y1 = box; base = y1 - 80
+    vals = a.get("vals", [0.42, 0.55, 0.38, 1.0, 0.5, 0.33]); hi = int(a.get("hi", 3))
+    n = len(vals); bw = (x1 - x0 - 100) / n
+    d.line([(x0 + 30, base), (x1 - 30, base)], fill=INK, width=5)
+    for i, v in enumerate(vals):
+        k = eo((lt - 0.08 * i) / 0.7)
+        bx = x0 + 50 + i * bw; h = (base - y0 - 110) * v * k
+        d.rounded_rectangle([bx + 10, base - h, bx + bw - 10, base], 14, fill=GREEN if i == hi else LINE)
+        if i == hi and k > 0.9:
+            lab = a.get("label", ""); fs = F_BODY(40)
+            w = fs.getlength(lab) + 36; lx = bx + bw / 2 - w / 2
+            d.rounded_rectangle([lx, base - h - 80, lx + w, base - h - 18], 30, fill=INK)
+            d.text((lx + 18, base - h - 80), lab, font=fs, fill=(255, 255, 255))
+            # crown-ish star
+            sx, sy = bx + bw / 2, base - h - 115; rr = 26 * spring((lt - 0.8) / 0.4)
+            pts = [(sx + rr * math.cos(math.pi / 2 + j * math.pi / 5) * (1 if j % 2 == 0 else 0.45), sy - rr * math.sin(math.pi / 2 + j * math.pi / 5) * (1 if j % 2 == 0 else 0.45)) for j in range(10)]
+            d.polygon(pts, fill=GREEN)
+
+ICONS = {"diyas": ic_diyas, "pin": ic_pin, "circles": ic_circles, "word": ic_word, "plates": ic_plates, "counter": ic_counter, "bottles": ic_bottles, "meter": ic_meter, "shield": ic_shield, "bottleq": ic_bottleq, "closed": ic_closed, "aqi": ic_aqi, "train": ic_train, "bullet": ic_bullet, "tanker": ic_tanker, "number": ic_number, "coin": ic_coin, "jail": ic_jail, "growbars": ic_growbars}
 
 
 # ---------------------------------------------------------------- captions
